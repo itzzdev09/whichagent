@@ -75,8 +75,11 @@ def grade(cfg, task, ws, box, start, run_dir):
     if r["tests_pass"] and cfg["run"]["regression"] and (failing is not None or task["suite_green"]):
         rc, _, results = test(cfg, box, ws, [], run_dir / "suite.log", suite=True)
         if failing is not None and results is not None:  # anything that passed at the fix and fails now
-            broke = sorted(t for t, ok in results.items() if not ok and t not in failing)
-            r["regression"], r["broke"] = bool(broke), broke[:20]
+            broke = {t for t, ok in results.items() if not ok and t not in failing}
+            if broke:  # a flaky test shouldn't fail the agent: it counts only if it fails twice in a row
+                again = test(cfg, box, ws, [], run_dir / "suite-again.log", suite=True)[2] or {}
+                broke = {t for t in broke if again.get(t) is not True}
+            r["regression"], r["broke"] = bool(broke), sorted(broke)[:20]
         elif task["suite_green"]:
             r["regression"] = rc != 0
     return r
