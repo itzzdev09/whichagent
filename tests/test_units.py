@@ -88,6 +88,8 @@ class Units(unittest.TestCase):
                 "Tokens: 1k sent, 1.2k cache write, 200 received. Cost: $0.02 message, $0.03 session.\n"
         self.assertEqual(agents.parse(CFG, "aider-text", aider, []),
                          {"cost_usd": 0.03, "tokens_in": 3500, "tokens_out": 500, "model": "gpt-x"})
+        local = "Model: ollama_chat/qwen2.5-coder:7b with whole edit format\nTokens: 9.8k sent, 443 received.\n"
+        self.assertEqual(agents.parse(CFG, "aider-text", local, [])["cost_usd"], 0.0)
 
 
 class TestResults(unittest.TestCase):

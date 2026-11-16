@@ -90,14 +90,15 @@ def gemini(cfg, out, argv):
 
 
 def aider(cfg, out, argv):
-    """Unverified: aider's "Tokens: ... sent, ... received. Cost: ... $X session." lines."""
+    """aider's "Tokens: ... sent, ... received. Cost: ... $X session." lines; local models print no Cost."""
     def n(s):
         return float(s[:-1]) * {"k": 1e3, "M": 1e6}[s[-1]] if s[-1] in "kM" else float(s)
     toks = re.findall(r"Tokens: ([\d.]+[kM]?) sent.*?([\d.]+[kM]?) received", out)
     session = re.findall(r"\$([\d.]+) session", out)
-    model = re.search(r"^(?:Main model|Model): (\S+)", out, re.M)
-    return {"cost_usd": float(session[-1]) if session else None, "tokens_in": round(sum(n(a) for a, _ in toks)),
-            "tokens_out": round(sum(n(b) for _, b in toks)), "model": model[1] if model else None}
+    m = re.search(r"^(?:Main model|Model): (\S+)", out, re.M)
+    model, tin, tout = m and m[1], round(sum(n(a) for a, _ in toks)), round(sum(n(b) for _, b in toks))
+    return {"cost_usd": float(session[-1]) if session else cost(cfg, model, tin, tout),
+            "tokens_in": tin, "tokens_out": tout, "model": model}
 
 
 PARSERS = {"claude-json": claude, "codex-jsonl": codex, "gemini-json": gemini, "aider-text": aider,
@@ -121,10 +122,15 @@ def _codex_model():
         return None
 
 
+LOCAL = ("ollama", "ollama_chat", "lm_studio", "llamafile")  # litellm prefixes for models on your machine
+
+
 def cost(cfg, model, tin, tout, cached=0):
     """USD from tokens with [prices] from whichagent.toml, else models.dev. None when the price is unknown."""
     if not model:
         return None
+    if model.split("/")[0] in LOCAL:
+        return 0.0
     p = cfg["prices"].get(model) or _models_dev(cfg["root"]).get(model) or _models_dev(cfg["root"]).get(
         model.split("/")[-1])
     if not p or "input" not in p or "output" not in p:

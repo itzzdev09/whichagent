@@ -211,7 +211,7 @@ Built-in adapters. `whichagent doctor` checks each adapter's flags against the i
 | Claude Code | `claude -p --output-format json --dangerously-skip-permissions` | stdin | `total_cost_usd` in the output |
 | Codex CLI | `codex exec --json --full-auto -` (Codex's own sandbox stays on) | stdin | token usage events × prices |
 | Gemini CLI | `gemini --output-format json --yolo` | stdin | `stats` tokens × prices |
-| Aider | `aider --message-file {prompt_file} --yes-always --no-auto-commits` | file | the "Cost: ... session" line |
+| Aider | `aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore` (plus quiet flags) | file | the "Cost: ... session" line; $0 for local models (ollama, lm_studio, llamafile) |
 | Qwen Code | `qwen --output-format json --yolo` | stdin | `stats` tokens × prices |
 | OpenCode | `opencode run` | stdin | none yet |
 | Goose | `goose run --no-session --instructions {prompt_file}` | file | none yet |
@@ -219,7 +219,7 @@ Built-in adapters. `whichagent doctor` checks each adapter's flags against the i
 | GitHub Copilot CLI | `copilot --allow-all-tools` | stdin | none yet |
 | Cursor CLI | `cursor-agent --print --force --output-format json` | stdin | none yet |
 
-Only Claude Code has been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
+Claude Code and Aider have been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
 
 ## 8. Grading
 
@@ -430,7 +430,7 @@ All four are built. The "Done when" checks need real agents, platforms and servi
 
 | Version | Scope | Done when | Status |
 |---|---|---|---|
-| v0.1 "It runs" | everything in section 18 | 20+ valid tasks mined and 3 agents run end to end on 3 real repos, on Linux, macOS and Windows | 24 tasks mined on 3 repos (Windows); Claude Code run end to end on a fixture repo |
+| v0.1 "It runs" | everything in section 18 | 20+ valid tasks mined and 3 agents run end to end on 3 real repos, on Linux, macOS and Windows | 24 tasks mined on 3 repos (Windows); Claude Code run end to end on a fixture repo; Aider + local qwen2.5-coder:7b on commander.js's 6 tasks; grading checked against the real fixes on 16 tasks |
 | v0.2 "Sharper" | per-test grading; Go, Rust and Java; dependency cache; shareable SVG results card; comparison across agent versions | the same 3 repos graded per test, plus a Go and a Rust repo | the 3 repos' runners checked with `doctor`; parsers tested on sample Go, Rust and Java output |
 | v0.3 "Sandboxed" | Docker and devcontainer mode | `peeker` and a filesystem-escape fake agent are both contained | test written; it needs a Docker daemon |
 | v0.4 "Always on" | GitHub Action: reruns on CLAUDE.md or AGENTS.md changes and on a schedule, with a PR comment showing the delta | the action runs on whichagent's own repo | needs GitHub Actions running on the repo |

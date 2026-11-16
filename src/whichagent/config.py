@@ -45,7 +45,7 @@ BUILTIN = {
     "gemini": {"cmd": "gemini --output-format json --yolo", "parse": "gemini-json", "unverified": True},
     "aider": {"cmd": "aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore"
                      " --no-check-update --no-show-release-notes --analytics-disable --no-pretty",
-              "stdin": False, "parse": "aider-text", "unverified": True},
+              "stdin": False, "parse": "aider-text"},
     "qwen": {"cmd": "qwen --output-format json --yolo", "parse": "gemini-json", "unverified": True},
     "opencode": {"cmd": "opencode run", "unverified": True},
     "goose": {"cmd": "goose run --no-session --instructions {prompt_file}", "stdin": False, "unverified": True},
