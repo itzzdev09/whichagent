@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "whichagent"
+dynamic = ["version"]
+description = "Find out which coding agent actually works on your repo: a benchmark built from your own git history."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = []
+keywords = ["coding agents", "benchmark", "claude code", "codex", "gemini cli", "aider", "swe-bench"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://github.com/itzzdev09/whichagent"
+Issues = "https://github.com/itzzdev09/whichagent/issues"
+
+[project.scripts]
+whichagent = "whichagent.cli:main"
+
+[tool.hatch.version]
+path = "src/whichagent/__init__.py"
