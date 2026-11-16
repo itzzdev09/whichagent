@@ -43,7 +43,8 @@ BUILTIN = {
     # `whichagent doctor` checks the flags against the installed CLI's --help.
     "codex": {"cmd": "codex exec --json --full-auto -", "parse": "codex-jsonl", "unverified": True},
     "gemini": {"cmd": "gemini --output-format json --yolo", "parse": "gemini-json", "unverified": True},
-    "aider": {"cmd": "aider --message-file {prompt_file} --yes-always --no-auto-commits",
+    "aider": {"cmd": "aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore"
+                     " --no-check-update --no-show-release-notes --analytics-disable --no-pretty",
               "stdin": False, "parse": "aider-text", "unverified": True},
     "qwen": {"cmd": "qwen --output-format json --yolo", "parse": "gemini-json", "unverified": True},
     "opencode": {"cmd": "opencode run", "unverified": True},
