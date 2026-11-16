@@ -26,7 +26,11 @@ def quiet(*_):
 
 
 def docker_ok():
-    return bool(shutil.which("docker")) and subprocess.run(["docker", "info"], capture_output=True).returncode == 0
+    """A running daemon with Linux containers (GitHub's Windows runners default to Windows containers)."""
+    if not shutil.which("docker"):
+        return False
+    r = subprocess.run(["docker", "info", "--format", "{{.OSType}}"], capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() == "linux"
 
 
 def agent_toml(name, cmd, extra=""):
