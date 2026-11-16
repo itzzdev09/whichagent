@@ -95,6 +95,21 @@ Built-in adapters planned for v0.1:
 
 An adapter is about five lines of TOML, so adding your favorite agent makes a good first PR.
 
+### Run it for $0
+
+whichagent itself is free and local. To benchmark without paying anyone, use open-source agents with local models, or free tiers:
+
+```toml
+# Aider + a local Ollama model: no account, no API bill (untested starting point)
+[[agent]]
+name    = "aider + qwen2.5-coder"
+extends = "aider"
+args    = ["--model", "ollama_chat/qwen2.5-coder:7b"]
+env     = { OLLAMA_API_BASE = "http://127.0.0.1:11434" }
+```
+
+Gemini CLI also has a free tier when you sign in with a Google account (rate-limited; use a small `--max-tasks`). Local runs report no cost; `[run] max_cost` only matters for paid agents.
+
 ## Safety
 
 To benchmark agents you have to run them unattended, with permission prompts off. whichagent:
