@@ -131,6 +131,21 @@ An adapter is a few lines of TOML, so adding your favorite agent makes a good fi
 
 Unverified adapters follow each CLI's docs but haven't been run by whichagent yet; `whichagent doctor` checks their flags on your machine. Several of these agents have free tiers or free models, which makes them cheap to compare. Agents get only an allowlist of environment variables; pass anything else with `env = { TOKEN = "$MY_TOKEN" }`, which reads it from your shell.
 
+### Run it for $0
+
+whichagent itself is free and local. To benchmark without paying anyone, use open-source agents with local models, or free tiers:
+
+```toml
+# Aider + a local Ollama model: no account, no API bill (untested starting point)
+[[agent]]
+name    = "aider + qwen2.5-coder"
+extends = "aider"
+args    = "--model ollama_chat/qwen2.5-coder:7b"
+env     = { OLLAMA_API_BASE = "http://127.0.0.1:11434" }
+```
+
+Gemini CLI also has a free tier when you sign in with a Google account (rate-limited; use a small `--max-tasks`). Local runs report no cost; `[run] max_cost` only matters for paid agents.
+
 ## Stacks
 
 `whichagent init` detects the stack and sets up per-test results where the runner can produce them:
