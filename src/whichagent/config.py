@@ -13,7 +13,8 @@ DEFAULTS = {
     "repo": {
         "setup": "",
         "test": "",
-        "test_patterns": ["tests/**", "test/**", "**/__tests__/**", "test_*.py", "*_test.py", "*.test.*", "*.spec.*"],
+        "test_patterns": ["tests/**", "test/**", "**/__tests__/**", "test_*.py", "*_test.py", "*.test.*", "*.spec.*",
+                          "*.test-*.*", "*.spec-*.*"],  # vitest type tests (x.test-d.ts) and the like
         "skip_if_changed": ["uv.lock", "poetry.lock", "Pipfile.lock", "requirements*.txt",
                             "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock*"],
         "setup_timeout": "10m",
@@ -112,12 +113,13 @@ def detect(root):
         return "uv sync", "uv run pytest -q {files}"
     if (root / "poetry.lock").exists():
         return "poetry install", "poetry run pytest -q {files}"
-    pkg = root / "package.json"
-    runner = "vitest run" if pkg.exists() and '"vitest"' in pkg.read_text("utf-8") else "jest"
-    if (root / "package-lock.json").exists():
-        return "npm ci", f"npx {runner} {{files}}"
-    if (root / "pnpm-lock.yaml").exists():
-        return "pnpm install --frozen-lockfile", f"pnpm exec {runner} {{files}}"
+    pkg = (root / "package.json").read_text("utf-8") if (root / "package.json").exists() else ""
+    runner = "vitest run" if '"vitest"' in pkg else "jest" if '"jest"' in pkg else None
+    test = "node --test {files}" if "node --test" in pkg and not runner else None
+    if (root / "package-lock.json").exists() and (runner or test):
+        return "npm ci", test or f"npx {runner} {{files}}"
+    if (root / "pnpm-lock.yaml").exists() and (runner or test):
+        return "pnpm install --frozen-lockfile", test or f"pnpm exec {runner} {{files}}"
     return None
 
 

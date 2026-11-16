@@ -12,7 +12,8 @@ CFG = {"root": Path("."), "prices": {"gpt-x": {"input": 1.0, "output": 10.0, "ca
 class Units(unittest.TestCase):
     def test_patterns(self):
         cfg = {"repo": config.DEFAULTS["repo"]}
-        for p in ["tests/test_calc.py", "pkg/test_x.py", "src/a.test.ts", "src/__tests__/a.js", "conftest.py"]:
+        for p in ["tests/test_calc.py", "pkg/test_x.py", "src/a.test.ts", "src/__tests__/a.js", "conftest.py",
+                  "src/a.test-d.ts"]:
             self.assertTrue(config.is_test(cfg, p), p)
         for p in ["calc.py", "src/testing.py", "docs/tests.md"]:
             self.assertFalse(config.is_test(cfg, p), p)

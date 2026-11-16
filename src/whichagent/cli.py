@@ -130,6 +130,9 @@ def cmd_doctor(cfg, a):
             else:
                 rc, secs = grade.test(cfg, ws, [], log)
                 print(f"test suite at HEAD: {'passes' if rc == 0 else 'FAILS'} ({secs:.0f}s, log in {log})")
+                if rc != 0:
+                    tail = log.read_text("utf-8", "replace").strip().splitlines()[-8:]
+                    print("  " + "\n  ".join(tail))
                 ok = ok and rc == 0
         finally:
             g.rmtree(tmp)
