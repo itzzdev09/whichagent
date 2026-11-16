@@ -43,7 +43,9 @@ def claude(cfg, out, argv):
     else:
         tin = u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
         tout = u.get("output_tokens", 0)
-    return {"cost_usd": d.get("total_cost_usd"), "tokens_in": tin, "tokens_out": tout, "turns": d.get("num_turns"),
+    usd = d.get("total_cost_usd")
+    return {"cost_usd": None if usd is None else round(usd, 6), "tokens_in": tin, "tokens_out": tout,
+            "turns": d.get("num_turns"),
             "model": max(mu, key=lambda k: mu[k].get("costUSD", 0), default=None), "error": bool(d.get("is_error"))}
 
 

@@ -118,8 +118,8 @@ def run(cfg, agents, tasks, yes=False, keep=False, retry_errors=False, log=print
         log("Nothing to run: every run is already in results.jsonl."
             + (f" {n} ended in an error; --retry-errors reruns them." if n else ""))
         return []
-    costs = {a["name"]: [x["cost_usd"] for x in old if x["agent"] == a["name"] and x["cost_usd"] is not None]
-             for a in agents}
+    costs = {a["name"]: [x["cost_usd"] for x in old if x["agent"] == a["name"] and x["cost_usd"] is not None
+                         and x["status"] not in errors] for a in agents}  # a failed login costs $0 and says nothing
     lo = sum(statistics.median(costs[a["name"]]) if costs[a["name"]] else NO_HISTORY[0] for _, a, _ in todo)
     hi = sum(max(costs[a["name"]]) if costs[a["name"]] else NO_HISTORY[1] for _, a, _ in todo)
     log(f"{len(todo)} runs, estimated ${lo:.2f}-${hi:.2f} (stops before passing max_cost ${rc['max_cost']:.2f})")

@@ -20,6 +20,8 @@ def edit(path, old, new):
 def main(kind):
     sys.stdin.read()  # the prompt
     if kind in ("perfect", "breaker"):
+        Path("tests/__pycache__").mkdir(exist_ok=True)  # what running the tests leaves behind
+        Path("tests/__pycache__/test_calc.cpython-312.pyc").write_bytes(b"\0")
         edit("calc.py", "a // b", "a / b")
         if "def mod" not in Path("calc.py").read_text():
             with open("calc.py", "a") as f:

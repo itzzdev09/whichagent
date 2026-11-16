@@ -11,6 +11,16 @@ import threading
 import time
 from pathlib import Path
 
+# Untracked files an agent leaves by running tools: not part of its change. Tracked files are unaffected.
+EXCLUDE = """.aider*
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+node_modules/
+"""
 STOP = threading.Event()  # set on Ctrl-C: no new process starts
 LIVE = set()              # running processes, killed on Ctrl-C
 _refs = threading.Lock()
@@ -81,7 +91,7 @@ def workspace(bare, branch_name, name):
     git(ws, "remote", "remove", "origin")
     rmtree(ws / ".git" / "logs")  # the reflog names the base clone's path
     (ws / ".git" / "info").mkdir(exist_ok=True)
-    (ws / ".git" / "info" / "exclude").write_text(".aider*\n")
+    (ws / ".git" / "info" / "exclude").write_text(EXCLUDE)
     return ws
 
 
