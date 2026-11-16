@@ -44,7 +44,8 @@ def gh_api(root, path):
 def statement(root, sha, msg, min_words, gh):
     """(text, source): the linked issue, else the PR, else a long enough commit message."""
     if gh:
-        prs = gh_api(root, f"repos/{{owner}}/{{repo}}/commits/{sha}/pulls") or []
+        prs = [p for p in gh_api(root, f"repos/{{owner}}/{{repo}}/commits/{sha}/pulls") or []
+               if not p["title"].startswith("Merge ")]  # a merge-forward PR says nothing about the fix
         for n in FIXES.findall(" ".join([msg] + [p.get("body") or "" for p in prs])):
             issue = gh_api(root, f"repos/{{owner}}/{{repo}}/issues/{n}")
             if issue and "pull_request" not in issue:
