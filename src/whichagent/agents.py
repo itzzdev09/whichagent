@@ -1,4 +1,4 @@
-"""Built-in adapters' output parsers, model prices, versions and flag checks."""
+"""Built-in adapters' output parsers, model prices and flag checks."""
 import functools
 import itertools
 import json
@@ -153,18 +153,6 @@ def _models_dev(root):
             if m.get("cost"):
                 out.setdefault(mid, m["cost"])
     return out
-
-
-@functools.cache
-def version(exe):
-    """First line of `<binary> --version`, recorded on every result."""
-    try:
-        r = subprocess.run([exe, "--version"], capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=60)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    lines = (r.stdout or r.stderr).strip().splitlines()
-    return lines[0] if lines else None
 
 
 def missing_flags(exe, argv):

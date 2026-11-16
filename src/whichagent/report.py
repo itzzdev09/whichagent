@@ -1,10 +1,11 @@
-"""Leaderboard and pairwise verdicts: terminal text, Markdown, and one self-contained HTML file."""
+"""Leaderboard and pairwise verdicts: terminal text, Markdown, a self-contained HTML page and an SVG card."""
+import collections
 import datetime
 import html
 import itertools
 import json
 
-from . import git as g, run as rn, stats
+from . import git as g, stats, store
 
 SMALL = 15        # under this many tasks, only large gaps are detectable
 CAP = 100_000     # characters of each diff embedded in report.html
@@ -12,17 +13,37 @@ HEAD = ["agent", "solved", "95% CI", "every time", "$/run", "$/solved", "median 
 MARK = {"solved": "✓", "failed": "✗", "timeout": "⏱", "agent_error": "!", "setup_error": "?"}
 
 
-def analyze(tasks, results):
+def label(r, by_version=False):
+    return f"{r['agent']} {r.get('agent_version') or '?'}" if by_version else r["agent"]
+
+
+def analyze(tasks, results, by_version=False):
     """(rows, pairs, per_agent): summaries best first, and every pairwise comparison."""
     ids = {t["id"] for t in tasks}
     per = {}
     for r in results:
         if r["task"] in ids:
-            per.setdefault(r["agent"], []).append(r)
+            per.setdefault(label(r, by_version), []).append(r)
     rows = [(n, s) for n, rs in per.items() if (s := stats.summary(rs))]
     rows.sort(key=lambda x: (-x[1]["rate"], x[1]["per_solved"] if x[1]["per_solved"] is not None else float("inf")))
     pairs = [(a, b, *stats.compare(per[a], per[b])) for (a, _), (b, _) in itertools.combinations(rows, 2)]
     return rows, pairs, per
+
+
+def versus(per, baseline, by_version=False):
+    """Each agent against its own baseline results on the tasks both ran: [agent, change, record, verdict]."""
+    base = {}
+    for r in baseline:
+        base.setdefault(label(r, by_version), []).append(r)
+    out = []
+    for n, rs in per.items():
+        now, then = stats.summary(rs), stats.summary(base.get(n, []))
+        if now and then:
+            up, down, _, p = stats.compare(rs, base[n])
+            verdict = (f"{'better' if up > down else 'worse'} (p = {p:.2g})" if p < 0.05
+                       else f"no real change (p = {p:.2g})")
+            out.append([n, f"{_pct(then['rate'])} -> {_pct(now['rate'])}", f"{up} up, {down} down", verdict])
+    return out
 
 
 def _money(x):
@@ -62,13 +83,18 @@ def _verdict(a, b, wins, losses, ties, p):
     return [f"{a} vs {b}", record, f"no real difference (p = {p:.2g})"]
 
 
-def _notes(rows):
+def _notes(rows, per, by_version):
     notes = []
     n = max((s["tasks"] for _, s in rows), default=0)
     if n < SMALL:
         notes.append(f"Only {n} task{'s' * (n != 1)}: only large gaps can be detected.")
     if not all(s["cost_complete"] for _, s in rows):
         notes.append("* Some runs reported no cost; the $ columns use the runs that did.")
+    for name, rs in per.items():
+        versions = collections.Counter(r.get("agent_version") for r in rs)
+        if len(versions) > 1 and not by_version:
+            mix = ", ".join(f"{v} ({k} runs)" for v, k in versions.items())
+            notes.append(f"{name} ran as {mix}: --by-version compares them.")
     return notes
 
 
@@ -77,15 +103,17 @@ def _text(rows):
     return "\n".join("  ".join(str(x).ljust(n) for x, n in zip(r, w)).rstrip() for r in rows)
 
 
-def terminal(tasks, results):
-    rows, pairs, _ = analyze(tasks, results)
+def terminal(tasks, results, baseline=None, by_version=False):
+    rows, pairs, per = analyze(tasks, results, by_version)
     if not rows:
         return "No graded runs yet."
     head, body = _table(rows)
     out = [_text([head, *body])]
     if pairs:
         out += ["", _text([_verdict(*p) for p in pairs])]
-    return "\n".join(out + [""] + _notes(rows)).rstrip()
+    if baseline and (vs := versus(per, baseline, by_version)):
+        out += ["", "Against the baseline:", _text(vs)]
+    return "\n".join(out + [""] + _notes(rows, per, by_version)).rstrip()
 
 
 def _md(rows):
@@ -102,8 +130,8 @@ def _title(t, n=70):
     return line if len(line) <= n else line[: n - 3] + "..."
 
 
-def markdown(tasks, results, name):
-    rows, pairs, per = analyze(tasks, results)
+def markdown(tasks, results, name, baseline=None, by_version=False):
+    rows, pairs, per = analyze(tasks, results, by_version)
     if not rows:
         return f"# whichagent: {name}\n\nNo graded runs yet.\n"
     head, body = _table(rows)
@@ -111,13 +139,38 @@ def markdown(tasks, results, name):
     md = [f"# whichagent: {name}", "", f"{len(tasks)} tasks, {runs} runs.", "", _md([head, *body])]
     if pairs:
         md += ["", "## Head to head", "", _md([["pair", "record", "verdict"], *[_verdict(*p) for p in pairs]])]
-    md += ["", *_notes(rows)]
+    if baseline and (vs := versus(per, baseline, by_version)):
+        md += ["", "## Against the baseline", "", _md([["agent", "solve rate", "tasks", "verdict"], *vs])]
+    md += ["", *_notes(rows, per, by_version)]
     names = [n for n, _ in rows]
     grid = [[f"`{t['id']}`", _title(t), *[_cell([r for r in per[n] if r["task"] == t["id"]]) for n in names]]
             for t in tasks]
     md += ["", "## Tasks", "", " ".join(f"{v} {k.replace('_', ' ')}" for k, v in MARK.items()), "",
            _md([["task", "statement", *names], *grid]), ""]
     return "\n".join(md)
+
+
+def card(tasks, results, name, by_version=False):
+    """A small SVG leaderboard to share or put in a README; follows the viewer's light or dark theme."""
+    rows, _, _ = analyze(tasks, results, by_version)
+    esc, w, h = html.escape, 520, 76 + 30 * len(rows)
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" role="img" '
+           f'aria-label="whichagent results for {esc(name)}"><style>'
+           "text{font:13px system-ui,-apple-system,'Segoe UI',sans-serif;fill:#1f2328}.m{fill:#656d76}"
+           ".t{font-size:15px;font-weight:600}.bg{fill:#fff;stroke:#d0d7de}.bar{fill:#0969da}.track{fill:#eaeef2}"
+           "@media (prefers-color-scheme:dark){text{fill:#e6edf3}.m{fill:#8d96a0}.bg{fill:#0d1117;stroke:#30363d}"
+           ".bar{fill:#4493f8}.track{fill:#21262d}}</style>"
+           f'<rect class="bg" x=".5" y=".5" width="{w - 1}" height="{h - 1}" rx="8"/>'
+           f'<text class="t" x="16" y="28">whichagent · {esc(name)}</text>'
+           f'<text class="m" x="16" y="48">{len(tasks)} tasks from this repo\'s history, graded by its own tests</text>']
+    for i, (n, s) in enumerate(rows):
+        y = 78 + 30 * i
+        out.append(f'<text x="16" y="{y}">{esc(n[:24])}</text>'
+                   f'<rect class="track" x="200" y="{y - 11}" width="160" height="12" rx="3"/>'
+                   f'<rect class="bar" x="200" y="{y - 11}" width="{160 * s["rate"]:.1f}" height="12" rx="3"/>'
+                   f'<text x="370" y="{y}">{_pct(s["rate"])}</text>'
+                   f'<text class="m" x="420" y="{y}">{_money(s["per_solved"])}/fix</text>')
+    return "".join(out) + "</svg>\n"
 
 
 def _chart(rows):
@@ -152,9 +205,9 @@ def _chart(rows):
     return "".join(s) + "</svg>"
 
 
-def page(cfg, tasks, results):
+def page(cfg, tasks, results, by_version=False):
     """report.html: leaderboard, cost chart with the efficient frontier, task grid with diffs side by side."""
-    rows, pairs, per = analyze(tasks, results)
+    rows, pairs, per = analyze(tasks, results, by_version)
     root, esc = cfg["root"], html.escape
     names = [n for n, _ in rows]
     data = {"tasks": {}, "runs": {}}
@@ -166,7 +219,7 @@ def page(cfg, tasks, results):
         data["tasks"][t["id"]] = {"statement": t["statement"], "fix": fix[:CAP]}
     for n in names:
         for r in sorted(per[n], key=lambda r: r["attempt"]):
-            f = rn.run_dir(root, r["task"], n, r["attempt"]) / "agent.diff"
+            f = store.run_dir(root, r["task"], r["agent"], r.get("agent_version"), r["attempt"]) / "agent.diff"
             data["runs"].setdefault(f"{r['task']}|{n}", []).append(
                 {"attempt": r["attempt"], "status": r["status"],
                  "diff": f.read_text("utf-8", "replace")[:CAP] if f.exists() else ""})
@@ -184,11 +237,11 @@ def page(cfg, tasks, results):
                 continue
             ok = sum(r["status"] == "solved" for r in rs)
             cls = rs[0]["status"] if len(rs) == 1 else "solved" if ok == len(rs) else "failed" if not ok else "mixed"
-            label = MARK[rs[0]["status"]] if len(rs) == 1 else f"{ok}/{len(rs)}"
+            mark = MARK[rs[0]["status"]] if len(rs) == 1 else f"{ok}/{len(rs)}"
             grid += (f'<td class="c {cls}" tabindex="0" data-k="{esc(t["id"])}|{esc(n)}" '
-                     f'title="{esc(n)}: {esc(rs[0]["status"])}">{label}</td>')
+                     f'title="{esc(n)}: {esc(rs[0]["status"])}">{mark}</td>')
         grid += "</tr>"
-    notes = "".join(f"<p class='mute'>{esc(x)}</p>" for x in _notes(rows))
+    notes = "".join(f"<p class='mute'>{esc(x)}</p>" for x in _notes(rows, per, by_version))
     when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     payload = json.dumps(data).replace("<", "\\u003c")
     runs = sum(s["runs"] for _, s in rows)

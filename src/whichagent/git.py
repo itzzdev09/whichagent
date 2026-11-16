@@ -1,14 +1,12 @@
-"""git and processes: history, leak-free base clones, workspaces, diffs, timeouts with tree kills."""
+"""git: history, leak-free base clones, workspaces, diffs."""
 import os
 import re
 import shutil
-import signal
 import stat
 import subprocess
 import sys
 import tempfile
 import threading
-import time
 from pathlib import Path
 
 # Untracked files an agent leaves by running tools: not part of its change. Tracked files are unaffected.
@@ -21,8 +19,6 @@ __pycache__/
 .coverage
 node_modules/
 """
-STOP = threading.Event()  # set on Ctrl-C: no new process starts
-LIVE = set()              # running processes, killed on Ctrl-C
 _refs = threading.Lock()
 
 
@@ -129,46 +125,6 @@ def put(repo, sha, paths, ws):
         else:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(data)
-
-
-def proc(cmd, cwd, timeout, out, err=None, env=None, stdin=None, shell=False):
-    """Run cmd with output to files, killing its whole process tree at timeout.
-
-    Returns (exit code, or None on timeout; seconds)."""
-    if STOP.is_set():
-        raise RuntimeError("stopped")
-    start = time.monotonic()
-    with open(out, "wb") as o, open(err or os.devnull, "wb") as e, open(stdin or os.devnull, "rb") as i:
-        p = subprocess.Popen(cmd, cwd=cwd, env=env, shell=shell, stdin=i, stdout=o,
-                             stderr=e if err else subprocess.STDOUT, start_new_session=os.name != "nt")
-        LIVE.add(p)
-        try:
-            if STOP.is_set():
-                kill(p)
-            rc = p.wait(timeout)
-        except subprocess.TimeoutExpired:
-            rc = None
-        # ponytail: on Windows, children an agent leaves behind after a normal exit survive; Job Objects would fix it
-        if rc is None or os.name != "nt":
-            kill(p)
-        LIVE.discard(p)
-    return rc, time.monotonic() - start
-
-
-def kill(p):
-    if os.name == "nt":
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
-    else:
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except OSError:
-            pass
-    p.wait()
-
-
-def killall():
-    for p in LIVE.copy():
-        kill(p)
 
 
 def rmtree(path):
