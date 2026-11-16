@@ -1,0 +1,63 @@
+name: whichagent
+description: Benchmark coding agents on this repository's own git history, and comment the result on pull requests.
+branding:
+  icon: bar-chart-2
+  color: blue
+
+inputs:
+  agents:
+    description: Comma-separated agents to run (default: the built-ins found on PATH plus your [[agent]] entries)
+    default: ""
+  max-tasks:
+    description: How many tasks to mine from history
+    default: "10"
+  max-cost:
+    description: Spend cap in USD; no run starts that would pass it
+    default: "5"
+  baseline:
+    description: A results.jsonl to compare against, such as one restored from the default branch
+    default: ""
+  args:
+    description: Extra whichagent flags, such as --attempts 3 or --sandbox docker
+    default: ""
+  comment:
+    description: Comment the report on the pull request (updates the previous comment)
+    default: "true"
+
+outputs:
+  report:
+    description: Path of the Markdown report
+    value: .whichagent/report.md
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - shell: bash
+      run: python -m pip install --quiet "${{ github.action_path }}"
+    - shell: bash
+      env:
+        AGENTS: ${{ inputs.agents }}
+        MAX_TASKS: ${{ inputs.max-tasks }}
+        MAX_COST: ${{ inputs.max-cost }}
+        BASELINE: ${{ inputs.baseline }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        flags=(--yes --max-tasks "$MAX_TASKS" --max-cost "$MAX_COST")
+        if [ -n "$AGENTS" ]; then flags+=(--agents "$AGENTS"); fi
+        if [ -n "$BASELINE" ] && [ -f "$BASELINE" ]; then flags+=(--baseline "$BASELINE"); fi
+        # shellcheck disable=SC2086  # ARGS holds several flags
+        whichagent mine "${flags[@]}" $ARGS
+        whichagent run "${flags[@]}" $ARGS
+        cat .whichagent/report.md >> "$GITHUB_STEP_SUMMARY"
+    - if: github.event_name == 'pull_request' && inputs.comment == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        gh pr comment "$PR" --body-file .whichagent/report.md --edit-last 2>/dev/null \
+          || gh pr comment "$PR" --body-file .whichagent/report.md

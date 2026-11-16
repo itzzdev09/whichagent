@@ -1,6 +1,6 @@
 # whichagent architecture
 
-> Design for v0.1–v0.4. v0.1 is implemented (build order in section 18); later versions are the plan.
+> Design for v0.1–v0.4, all implemented. Section 19 says what has been run against real repos and agents, and what hasn't yet.
 
 ## 1. Goal
 
@@ -47,6 +47,7 @@ flowchart TB
 | Tasks, results, logs, diffs, reports | `.whichagent/` in your repo (add it to `.gitignore`) |
 | Leak-free base clones | `.whichagent/bases/<task>.git`, one per task, made during `mine` |
 | Workspaces | the system temp dir, one per run, deleted after grading (`--keep` to inspect) |
+| Dependency cache | the system temp dir, `whichagent-cache/`: the 3 most recently used dependency sets per repo |
 | Model prices | models.dev public JSON, cached for 24 hours in `.whichagent/prices.json` |
 | whichagent's own CI | GitHub Actions on Linux, macOS and Windows, with fixture repos and fake agents (no API spend) |
 | Releases | PyPI, published from GitHub Actions on version tags (trusted publishing) |
@@ -70,6 +71,9 @@ Workspaces sit in the temp dir on purpose: inside a synced folder (OneDrive, Dro
   "fix_lines": 14,                  // changed source lines in the real fix
   "mode": "hidden",                 // hidden | visible (see 5.3)
   "suite_green": true,              // full suite passes at the fix commit
+  "fail_to_pass": ["tests/test_reader.py::test_no_trailing_newline"],  // per-test grading, section 8
+  "pass_to_pass": ["tests/test_reader.py::test_basic"],
+  "suite_failing": [],              // tests already failing in the full suite at the fix
   "test_secs": 8.2                  // how long the task's tests take
 }
 ```
@@ -81,7 +85,9 @@ Workspaces sit in the temp dir on purpose: inside a synced folder (OneDrive, Dro
   "task": "3f9c2e1", "agent": "codex", "attempt": 1,
   "status": "solved",               // solved | failed | timeout | agent_error | setup_error
   "tests_pass": true,
-  "regression": false,              // broke the rest of the suite
+  "f2p": "1/1", "p2p": "12/12",     // per-test grading: flipped tests passing, kept tests passing
+  "regression": false,              // a test that passed at the fix fails now
+  "broke": [],                      // which ones
   "cost_usd": 0.31, "tokens_in": 182000, "tokens_out": 9100,
   "secs": 245, "turns": 18,
   "files_changed": 2,
@@ -93,7 +99,7 @@ Workspaces sit in the temp dir on purpose: inside a synced folder (OneDrive, Dro
 }
 ```
 
-Each run also keeps `prompt.txt`, `stdout.log`, `stderr.log`, `agent.diff` and `tests.log` in `.whichagent/runs/<task>/<agent>/<attempt>/`.
+Each run also keeps `prompt.txt`, `install.log`, `setup.log`, `stdout.log`, `stderr.log`, `agent.diff`, `tests.log` and `suite.log` in `.whichagent/runs/<task>/<agent>@<version>/<attempt>/`.
 
 ## 5. Mining
 
@@ -119,6 +125,8 @@ For each candidate, in a fresh workspace at `base` (section 6):
 5. repeat steps 2–3 `verify_runs` times (default 2); any disagreement means flaky, and the candidate is dropped
 
 Mining stops when `max_tasks` (25) valid tasks are found.
+
+When the test runner reports per-test results (section 8), steps 2–3 record which tests fail before the fix and pass after (`fail_to_pass`, at least one) and which pass both times (`pass_to_pass`); repeated runs must agree on both lists. Step 4 records the tests that already fail in the full suite (`suite_failing`), so regressions can be checked even when the suite isn't fully green.
 
 ### 5.3 Hidden vs visible tests
 
@@ -172,7 +180,9 @@ The fix commit and everything after it aren't reachable from `base`, so they nev
 
 **Overlays.** Files from the agent's `overlay` map are copied in after cloning. This is how you A/B a CLAUDE.md, AGENTS.md, MCP config or skill.
 
-**Setup.** `setup` runs in every workspace (`setup_timeout`, default 10 minutes). A failure is recorded as `setup_error` and isn't counted against the agent. v0.1 pays for a full setup per run; the package managers' global caches (uv, npm, pnpm) keep that fast. v0.2 adds a dependency cache keyed by lockfile hash.
+**Install and setup.** `install` (dependencies) and then `setup` (builds, codegen) run in every workspace (`setup_timeout`, default 10 minutes). A failure is recorded as `setup_error` and isn't counted against the agent. With `cache = true`, everything `install` created is cached in the temp dir, keyed by the content of the lockfiles, and copied into later workspaces instead of installing again; Node stacks turn this on by default. Python virtualenvs aren't relocatable, and uv's own cache already makes `uv sync` fast.
+
+**Docker mode.** With `--sandbox docker`, install, setup, the agent and the tests run in a container (section 14). git operations stay on the host; the container sees only the run's temp dir, mounted at `/wa`.
 
 ## 7. Agent adapters
 
@@ -191,10 +201,10 @@ timeout = "30m"
 - **Variants.** `extends = "claude"` copies an agent. Add `args = "--model claude-opus-5-5"` to test a model, or `overlay = {...}` to test a setup.
 - **Parsers.** One small function per output format: `claude-json`, `codex-jsonl`, `gemini-json`, `aider-text`, and `none` (time and pass/fail only).
 - **Prices.** Tokens are converted to dollars with models.dev prices, overridable in `[prices]`. Unknown prices show as `—`, never a guess. On subscription plans, costs are still shown at API prices, which keeps agents comparable on efficiency.
-- **Versions.** `<binary> --version` is recorded on every result, so runs from different agent versions are never silently mixed.
+- **Versions.** `<binary> --version` is recorded on every result. Reports flag an agent whose runs span several versions; `--by-version` reports each version separately, and `run --new-version` reruns the tasks an agent has only done with another version.
 - **Your global config.** By default agents read your usual global setup (`~/.claude`, `~/.codex`, ...): you're measuring your setup. To isolate an agent, point its config-dir variable elsewhere in its `env`.
 
-Built-in adapters for v0.1. `whichagent doctor` checks each adapter's flags against the installed CLI's `--help`. The Codex, Gemini CLI and Aider adapters are built from their docs and marked unverified until they've been run.
+Built-in adapters. `whichagent doctor` checks each adapter's flags against the installed CLI's `--help`.
 
 | Agent | Command | Prompt | Cost source |
 |---|---|---|---|
@@ -202,8 +212,14 @@ Built-in adapters for v0.1. `whichagent doctor` checks each adapter's flags agai
 | Codex CLI | `codex exec --json --full-auto -` (Codex's own sandbox stays on) | stdin | token usage events × prices |
 | Gemini CLI | `gemini --output-format json --yolo` | stdin | `stats` tokens × prices |
 | Aider | `aider --message-file {prompt_file} --yes-always --no-auto-commits` | file | the "Cost: ... session" line |
+| Qwen Code | `qwen --output-format json --yolo` | stdin | `stats` tokens × prices |
+| OpenCode | `opencode run` | stdin | none yet |
+| Goose | `goose run --no-session --instructions {prompt_file}` | file | none yet |
+| Amp | `amp --execute --dangerously-allow-all` | stdin | none yet |
+| GitHub Copilot CLI | `copilot --allow-all-tools` | stdin | none yet |
+| Cursor CLI | `cursor-agent --print --force --output-format json` | stdin | none yet |
 
-Next in line: OpenCode, Cursor CLI, GitHub Copilot CLI, Amp, Goose, Qwen Code.
+Only Claude Code has been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
 
 ## 8. Grading
 
@@ -212,11 +228,11 @@ After the agent exits or is killed at its timeout:
 1. **Capture.** Stage everything (`git add -A`) and save the diff against the tree the agent started from (`base` plus overlays and, in visible mode, the given tests) as `agent.diff`. Commits the agent made are included; ignored files are not.
 2. **Measure.** `files_changed`, `extra_files`, `wrote_tests` (added test lines or files) and `tampered` (removed lines from existing test files, deleted them, or touched test config: `conftest.py`, `pytest.ini`, `jest.config.*`, `vitest.config.*`, ...). Adding a test to an existing file isn't tampering. Edits to `pyproject.toml` or `package.json` are flagged for review rather than reset, since they can be legitimate.
 3. **Reset.** Every path matching `test_patterns` or test config goes back to its `base` state (new test files are deleted), then the fix commit's test files are copied in.
-4. **Test.** Run the test command on the task's test files (`test_timeout`, default 10 minutes): `tests_pass`.
-5. **Regression.** If `suite_green` and the task's tests pass, run the full suite too. Anything red is a regression. (When the task's tests fail, the run has failed anyway.)
+4. **Test.** Run the test command on the task's test files (`test_timeout`, default 10 minutes). With per-test results, `tests_pass` means every `fail_to_pass` and `pass_to_pass` test passed; without them, that the command exited 0.
+5. **Regression.** If the task's tests pass, run the full suite too. A test that passed at the fix and fails now is a regression (`broke` lists them); without per-test results, any failure counts when the suite was green at the fix. (When the task's tests fail, the run has failed anyway.)
 6. **Verdict.** `solved = tests_pass and not regression`.
 
-v0.1 grades by the exit code of the task's test files: all of them must pass. v0.2 parses JUnit XML (pytest `--junitxml`, Vitest and Jest reporters, `go test -json`) to get per-test fail-to-pass and pass-to-pass lists, as SWE-bench does.
+**Per-test results**, as SWE-bench grades: the test command writes a report to `{report}` — JUnit XML (pytest `--junitxml`, Vitest's and `node --test`'s junit reporters, Maven Surefire), Jest's JSON, or `go test -json`. Gradle's fixed report dir is set with `report`, and cargo's own output is read from the log. Test ids are made relative to the workspace, so they match across runs. Without a report, grading falls back to the exit code of the task's test files.
 
 ## 9. Scheduler
 
@@ -224,7 +240,7 @@ v0.1 grades by the exit code of the task's test files: all of them must pass. v0
 - **Concurrency.** `jobs` worker threads (all heavy work is subprocesses, so threads are enough) and `jobs_per_agent` to respect subscription rate limits.
 - **Resume.** Runs already in `results.jsonl` are skipped. A result is written only when its run finishes. `--retry-errors` reruns runs that ended in `agent_error` or `setup_error` (say, after fixing a login); the newest result counts.
 - **Timeouts.** The whole process tree is killed: a new session plus `killpg` on POSIX, `taskkill /T /F` on Windows.
-- **Environment.** Agents get an allowlist: PATH, home and temp dirs, locale, the OS variables Windows needs, the provider keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, ...) and the agent's own `env`. Nothing else from your shell.
+- **Environment.** Agents get an allowlist: PATH, home and temp dirs, locale, the OS variables Windows needs, the provider keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, ...) and the agent's own `env`. Nothing else from your shell. In Docker mode a container gets only the credentials and proxy variables, by name, plus the agent's `env`.
 - **Budget.** Before starting, whichagent prints the run count and a cost range based on earlier results (or conservative defaults) and asks to continue (`--yes` skips the prompt). During the run, no new run starts once spent money plus the in-flight estimate would pass `max_cost`.
 
 ## 10. Statistics
@@ -242,6 +258,8 @@ Standard library only (`math`, `random`).
 - **Terminal**: the leaderboard and the pairwise verdicts.
 - **`report.html`**: one self-contained file (inline CSS, JS and SVG, no CDN, works offline, light and dark). It has the leaderboard, a cost-vs-solve-rate chart showing which agents are on the efficient frontier, and a task × agent grid: click a cell to see the agent's diff next to the real fix.
 - **`report.md`**: paste into a PR, an issue or a post.
+- **`card.svg`**: a small leaderboard to share or put in a README; it follows the viewer's light or dark theme.
+- **Baseline**: `--baseline <results.jsonl>` adds each agent's change against an earlier run, with a paired sign test. The GitHub Action uses it for its PR comment.
 - **JSONL**: `tasks.jsonl` and `results.jsonl` for your own analysis.
 
 ## 12. Configuration
@@ -250,8 +268,10 @@ Standard library only (`math`, `random`).
 
 ```toml
 [repo]
-setup           = "uv sync"
-test            = "uv run pytest -q {files}"   # {files} = the task's test files
+install         = "uv sync"                                   # dependencies; cache = true caches them
+setup           = ""                                          # builds, codegen
+test            = "uv run pytest -q {files} --junitxml={report}"   # {files} = the task's test files
+suite           = "uv run pytest -q --junitxml={report}"      # the whole suite
 test_patterns   = ["tests/**", "**/test_*.py", "**/*_test.py"]
 skip_if_changed = ["uv.lock", "requirements*.txt"]
 
@@ -269,6 +289,11 @@ jobs       = 3
 timeout    = "30m"
 max_cost   = 25.0            # USD, hard stop
 regression = true
+sandbox    = "host"              # or "docker"
+
+[docker]                      # for --sandbox docker
+image  = ""                   # default: built from .devcontainer/devcontainer.json or a Dockerfile
+mounts = ["~/.claude:/root/.claude:ro"]
 
 [[agent]]
 name    = "claude-opus"
@@ -284,15 +309,19 @@ overlay = { "CLAUDE.md" = "experiments/CLAUDE.v2.md" }
 "some-model" = { input = 1.25, output = 10.0 }
 ```
 
-Stack detection in v0.1:
+`{dirs}` (each test file's directory as `./dir`, for `go test`) and `{names}` (file names without extension, for `cargo test --test` and JUnit classes) work like `{files}`; `{names:,}` joins with commas instead of spaces.
 
-| Found | `setup` | `test` |
-|---|---|---|
-| `uv.lock` | `uv sync` | `uv run pytest -q {files}` |
-| `poetry.lock` | `poetry install` | `poetry run pytest -q {files}` |
-| `package-lock.json` | `npm ci` | `npx vitest run {files}` or `npx jest {files}` |
-| `pnpm-lock.yaml` | `pnpm install --frozen-lockfile` | `pnpm exec vitest run {files}` or `pnpm exec jest {files}` |
-| anything else | `init` asks you for the two commands | |
+Stack detection:
+
+| Found | `install` | `test` | Per-test results |
+|---|---|---|---|
+| `uv.lock`, `poetry.lock` | `uv sync`, `poetry install` | `pytest -q {files}` | `--junitxml={report}` |
+| `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` | `npm ci`, `pnpm install --frozen-lockfile`, `yarn install` (cached) | `vitest run`, `jest` or `node --test`, picked from `package.json` | junit reporter, Jest JSON |
+| `go.mod` | `go mod download` | `go test -json {dirs}` | `go test -json` |
+| `Cargo.toml` | `cargo fetch` | `cargo test --no-fail-fast --test {names: --test }` | cargo's output |
+| `pom.xml` | `mvn test-compile` | `mvn test -Dtest={names:,}` | Surefire XML |
+| `build.gradle(.kts)` | | `gradlew test --tests {names: --tests }` | `build/test-results/test` |
+| anything else | `init` asks for setup and test commands | | exit code |
 
 ## 13. CLI
 
@@ -302,23 +331,32 @@ whichagent init           write whichagent.toml from the detected stack
 whichagent doctor         check git, the test command at HEAD, and each agent's flags
 whichagent mine           find and validate tasks → .whichagent/tasks.jsonl
 whichagent run            run the matrix (resumable) → .whichagent/results.jsonl
-whichagent report         terminal table, report.html, report.md
+whichagent report         terminal table, report.html, report.md, card.svg
 whichagent compare A B    paired comparison of two agents
 whichagent show <task>    statement, real fix, each agent's diff
+
+--retry-errors            rerun runs that ended in agent_error or setup_error
+--new-version             rerun tasks an agent has only done with another version of itself
+--by-version              report each agent version separately
+--baseline PATH           compare against an earlier results.jsonl
+--sandbox docker          run install, setup, agents and tests in a container
+--keep                    keep workspaces for inspection
 ```
 
 ## 14. Safety model
 
 Benchmarking means running agents unattended with approvals off. On the host they act with your user's permissions.
 
-v0.1 has:
+On the host, whichagent has:
 
 - throwaway clones outside your repo, so your working tree is never touched
 - the environment allowlist (section 9), so secrets in your shell aren't passed through
 - timeouts with a process-tree kill, and a hard spend cap
 - a one-time confirmation on each machine's first run that says all of this plainly
 
-Not covered in v0.1: files in your home directory are still reachable, and so is the network. An agent could even find your real repo on disk. v0.3 adds Docker mode: setup, agent and grading run in a container built from the repo's `.devcontainer/devcontainer.json` or a Dockerfile, with only the workspace mounted.
+Not covered on the host: files in your home directory are still reachable, and so is the network. An agent could even find your real repo on disk.
+
+**Docker mode** (`--sandbox docker`) closes the filesystem gap: install, setup, agent and grading run in a container from `[docker] image`, the repo's `.devcontainer/devcontainer.json` or a Dockerfile, with only the run's temp dir mounted. The agent CLIs must be in the image. Credentials reach the container by name only; logins stored in files can be mounted read-only with `[docker] mounts`. Containers are killed with `docker kill` at their timeout. The network stays open, since agents need their APIs.
 
 ## 15. Tech stack
 
@@ -332,21 +370,28 @@ Not covered in v0.1: files in your home directory are still reachable, and so is
 
 ```text
 src/whichagent/
-  cli.py       commands and the quickstart flow                ~210 lines
-  config.py    TOML loading, stack defaults, agent extends     ~190
-  git.py       log parsing, base clones, workspaces, diffs     ~170
-  mine.py      candidates, validation, statements, mode        ~140
-  agents.py    built-in adapters, output parsers, prices       ~180
-  run.py       scheduler, timeouts, env, budget, resume        ~180
-  grade.py     capture, reset, test, verdict                   ~50
-  stats.py     Wilson, bootstrap, pass^k, sign test            ~80
-  report.py    terminal, Markdown, HTML (inline SVG)           ~260
+  cli.py          commands and the quickstart flow                ~240 lines
+  config.py       TOML loading, defaults, agents and extends      ~160
+  stacks.py       stack detection                                 ~55
+  store.py        .whichagent/ files: tasks, results, run dirs    ~45
+  git.py          history, base clones, workspaces, diffs         ~140
+  sandbox.py      host and Docker executors, timeouts, env        ~250
+  workspace.py    clone, install with cache, setup                ~95
+  mine.py         candidates, validation, statements, mode        ~160
+  agents.py       output parsers, prices, flag checks             ~170
+  run.py          scheduler, budget, resume                       ~155
+  grade.py        placeholders, capture, reset, test, verdict     ~80
+  testresults.py  JUnit XML, Jest JSON, go test -json, cargo      ~90
+  stats.py        Wilson, bootstrap, pass^k, sign test            ~80
+  report.py       terminal, Markdown, HTML, SVG card, baseline    ~310
 tests/
-  repos.py       builds tiny git repos with known fix commits
-  fake_agent.py  fake agents (section 17)
+  repos.py         builds tiny git repos with known fix commits
+  fake_agent.py    fake agents (section 17)
+  junit_runner.py  unittest with JUnit XML, so fixtures get per-test results
+action.yml         the GitHub Action
 ```
 
-About 1,450 lines for v0.1.
+About 2,000 lines. Dependencies point one way: `cli` uses `mine` and `run`, which use `workspace` and `grade`, which use `git`, `sandbox`, `store` and `testresults`. Nothing imports `cli`, and the executors in `sandbox` share one interface, so mining, running and grading don't care whether commands run on the host or in a container.
 
 ## 17. Testing whichagent itself
 
@@ -360,8 +405,9 @@ CI spends nothing on APIs. Tests build small git repos with known bug-fix commit
 | `breaker` | fixes the bug, breaks another test | failed, regression |
 | `sleeper` | sleeps past the timeout | timeout, no processes left behind |
 | `peeker` | runs `git log --all` and searches for the fix | finds nothing |
+| `escaper` | reads a file outside the workspace | blocked in Docker mode (on the host it can) |
 
-`peeker` is the test behind the "no leaks" claim.
+`peeker` is the test behind the "no leaks" claim. The fixtures use `tests/junit_runner.py`, a stdlib unittest runner that writes JUnit XML, so per-test grading is tested without pytest. The Docker test runs when a Docker daemon is available.
 
 ## 18. Build order for v0.1
 
@@ -376,14 +422,18 @@ CI spends nothing on APIs. Tests build small git repos with known bug-fix commit
 9. `init` stack detection, `doctor` and the quickstart flow
 10. Dogfooding on 3 open-source repos (at least one Python, one TypeScript): fix what breaks, then publish to PyPI
 
+Steps 1–9 are done. Step 10 is under way: 24 tasks mined on pallets/click, tj/commander.js and remeda/remeda, and what broke is fixed; agent runs on them and the PyPI release are next.
+
 ## 19. Milestones
 
-| Version | Scope | Done when |
-|---|---|---|
-| v0.1 "It runs" | everything in section 18 | 20+ valid tasks mined and 3 agents run end to end on 3 real repos, on Linux, macOS and Windows |
-| v0.2 "Sharper" | per-test grading (JUnit XML); Go, Rust and Java; dependency cache; shareable SVG results card; comparison across agent versions | the same 3 repos graded per test, plus a Go and a Rust repo |
-| v0.3 "Sandboxed" | Docker and devcontainer mode | `peeker` and a filesystem-escape fake agent are both contained |
-| v0.4 "Always on" | GitHub Action: reruns on CLAUDE.md or AGENTS.md changes and on a schedule, with a PR comment showing the delta | the action runs on whichagent's own repo |
+All four are built. The "Done when" checks need real agents, platforms and services:
+
+| Version | Scope | Done when | Status |
+|---|---|---|---|
+| v0.1 "It runs" | everything in section 18 | 20+ valid tasks mined and 3 agents run end to end on 3 real repos, on Linux, macOS and Windows | 24 tasks mined on 3 repos (Windows); Claude Code run end to end on a fixture repo |
+| v0.2 "Sharper" | per-test grading; Go, Rust and Java; dependency cache; shareable SVG results card; comparison across agent versions | the same 3 repos graded per test, plus a Go and a Rust repo | the 3 repos' runners checked with `doctor`; parsers tested on sample Go, Rust and Java output |
+| v0.3 "Sandboxed" | Docker and devcontainer mode | `peeker` and a filesystem-escape fake agent are both contained | test written; it needs a Docker daemon |
+| v0.4 "Always on" | GitHub Action: reruns on CLAUDE.md or AGENTS.md changes and on a schedule, with a PR comment showing the delta | the action runs on whichagent's own repo | needs GitHub Actions running on the repo |
 
 Later, if people want it: opt-in pooled results across repos ("which agent wins on Django apps?"), rewriting statements to strip solution hints, and tasks that span several commits.
 
