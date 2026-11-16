@@ -104,7 +104,7 @@ whichagent itself is free and local. To benchmark without paying anyone, use ope
 [[agent]]
 name    = "aider + qwen2.5-coder"
 extends = "aider"
-args    = ["--model", "ollama_chat/qwen2.5-coder:7b"]
+args    = "--model ollama_chat/qwen2.5-coder:7b"
 env     = { OLLAMA_API_BASE = "http://127.0.0.1:11434" }
 ```
 
