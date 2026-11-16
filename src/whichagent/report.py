@@ -35,7 +35,7 @@ def _pct(x):
 
 def _issues(s):
     parts = [f"{n} {k.replace('_', ' ')}" for k, n in s["status"].items() if k not in ("solved", "failed")]
-    parts += [f"{s[k]} {k}" for k in ("tampered", "regressions") if s[k]]
+    parts += [f"{s[k]} {k}" for k in ("tampered", "regressions", "flagged") if s[k]]
     return ", ".join(parts) or "-"
 
 

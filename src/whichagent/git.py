@@ -58,11 +58,11 @@ def commits(repo, since):
 
 def base_clone(repo, sha, dest, depth):
     """Bare shallow clone that ends at sha: the fix and every later commit never enter it."""
-    if dest.exists():
-        return dest
-    dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = f"whichagent/tmp-{sha[:12]}"
     with _refs:  # ref updates in your repo, one at a time
+        if dest.exists():
+            return dest
+        dest.parent.mkdir(parents=True, exist_ok=True)
         git(repo, "branch", "-f", tmp, sha)
         try:
             git(repo, "clone", "-q", "--bare", "--single-branch", "--no-tags", f"--depth={depth}",

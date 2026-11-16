@@ -1,6 +1,6 @@
 # whichagent architecture
 
-> Design for v0.1–v0.4. Nothing is implemented yet; this document is the build plan.
+> Design for v0.1–v0.4. v0.1 is implemented (build order in section 18); later versions are the plan.
 
 ## 1. Goal
 
@@ -194,7 +194,7 @@ timeout = "30m"
 - **Versions.** `<binary> --version` is recorded on every result, so runs from different agent versions are never silently mixed.
 - **Your global config.** By default agents read your usual global setup (`~/.claude`, `~/.codex`, ...): you're measuring your setup. To isolate an agent, point its config-dir variable elsewhere in its `env`.
 
-Built-in adapters for v0.1. Exact flags get checked against each CLI's `--help` when the adapters are built, and `whichagent doctor` re-checks them on your machine.
+Built-in adapters for v0.1. `whichagent doctor` checks each adapter's flags against the installed CLI's `--help`. The Codex, Gemini CLI and Aider adapters are built from their docs and marked unverified until they've been run.
 
 | Agent | Command | Prompt | Cost source |
 |---|---|---|---|
@@ -209,11 +209,11 @@ Next in line: OpenCode, Cursor CLI, GitHub Copilot CLI, Amp, Goose, Qwen Code.
 
 After the agent exits or is killed at its timeout:
 
-1. **Capture.** Stage everything (`git add -A`) and save `git diff --cached <base>` as `agent.diff`. Commits the agent made are included; ignored files are not.
-2. **Measure.** `files_changed`, `extra_files`, `wrote_tests` (new test files) and `tampered` (changed existing test files or test config: `conftest.py`, `pytest.ini`, `jest.config.*`, `vitest.config.*`, ...). Edits to `pyproject.toml` or `package.json` are flagged for review rather than reset, since they can be legitimate.
+1. **Capture.** Stage everything (`git add -A`) and save the diff against the tree the agent started from (`base` plus overlays and, in visible mode, the given tests) as `agent.diff`. Commits the agent made are included; ignored files are not.
+2. **Measure.** `files_changed`, `extra_files`, `wrote_tests` (added test lines or files) and `tampered` (removed lines from existing test files, deleted them, or touched test config: `conftest.py`, `pytest.ini`, `jest.config.*`, `vitest.config.*`, ...). Adding a test to an existing file isn't tampering. Edits to `pyproject.toml` or `package.json` are flagged for review rather than reset, since they can be legitimate.
 3. **Reset.** Every path matching `test_patterns` or test config goes back to its `base` state (new test files are deleted), then the fix commit's test files are copied in.
-4. **Test.** Run the test command on the task's test files: `tests_pass`.
-5. **Regression.** If `suite_green`, run the full suite too. Anything red is a regression.
+4. **Test.** Run the test command on the task's test files (`test_timeout`, default 10 minutes): `tests_pass`.
+5. **Regression.** If `suite_green` and the task's tests pass, run the full suite too. Anything red is a regression. (When the task's tests fail, the run has failed anyway.)
 6. **Verdict.** `solved = tests_pass and not regression`.
 
 v0.1 grades by the exit code of the task's test files: all of them must pass. v0.2 parses JUnit XML (pytest `--junitxml`, Vitest and Jest reporters, `go test -json`) to get per-test fail-to-pass and pass-to-pass lists, as SWE-bench does.
@@ -222,7 +222,7 @@ v0.1 grades by the exit code of the task's test files: all of them must pass. v0
 
 - **Matrix.** Tasks × agents × attempts, interleaved task by task. Stopping early (budget, Ctrl-C) still leaves every agent with the same tasks done, so partial results stay comparable.
 - **Concurrency.** `jobs` worker threads (all heavy work is subprocesses, so threads are enough) and `jobs_per_agent` to respect subscription rate limits.
-- **Resume.** Runs already in `results.jsonl` are skipped. A result is written only when its run finishes.
+- **Resume.** Runs already in `results.jsonl` are skipped. A result is written only when its run finishes. `--retry-errors` reruns runs that ended in `agent_error` or `setup_error` (say, after fixing a login); the newest result counts.
 - **Timeouts.** The whole process tree is killed: a new session plus `killpg` on POSIX, `taskkill /T /F` on Windows.
 - **Environment.** Agents get an allowlist: PATH, home and temp dirs, locale, the OS variables Windows needs, the provider keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, ...) and the agent's own `env`. Nothing else from your shell.
 - **Budget.** Before starting, whichagent prints the run count and a cost range based on earlier results (or conservative defaults) and asks to continue (`--yes` skips the prompt). During the run, no new run starts once spent money plus the in-flight estimate would pass `max_cost`.
@@ -231,7 +231,7 @@ v0.1 grades by the exit code of the task's test files: all of them must pass. v0
 
 Standard library only (`math`, `random`).
 
-- **Solve rate.** Solved runs ÷ runs, averaged per task. 95% **Wilson interval** when `attempts = 1`, because it stays sane with small samples and near 0% or 100%. With more attempts, a **bootstrap over tasks**, because runs on the same task aren't independent.
+- **Solve rate.** Solved runs ÷ runs, averaged per task. 95% **Wilson interval** when `attempts = 1`, because it stays sane with small samples and near 0% or 100%. With more attempts, a **bootstrap over tasks**, because runs on the same task aren't independent, never narrower than the task-level Wilson interval (on a few tasks that all score 100%, a plain bootstrap would claim 100%–100%).
 - **Solved every time.** The share of tasks solved in all `attempts` runs (pass^k): reliability for unattended use.
 - **Cost per solved task.** Total cost ÷ solved runs: the number budgets are made of.
 - **Paired comparison.** For agents A and B on shared tasks, A wins a task if its solve rate on it is higher. An exact two-sided **sign test** on wins vs losses (ties dropped) gives the verdict: "A is better (p = 0.002)" or "no real difference (p = 0.45)".
@@ -328,25 +328,25 @@ Not covered in v0.1: files in your home directory are still reachable, and so is
 - **None of** async, a database, a plugin system or a web server: threads, subprocesses, JSONL, one HTML file.
 - **Platforms.** Linux, macOS and Windows, all three in CI.
 
-## 16. Code layout (planned)
+## 16. Code layout
 
 ```text
 src/whichagent/
-  cli.py       commands and the quickstart flow                ~200 lines
-  config.py    TOML loading, stack defaults, agent extends     ~150
-  git.py       log parsing, base clones, workspaces, diffs     ~150
-  mine.py      candidates, validation, statements, mode        ~350
-  agents.py    built-in adapters, output parsers, prices       ~250
-  run.py       scheduler, timeouts, env, budget, resume        ~300
-  grade.py     capture, reset, test, verdict                   ~200
-  stats.py     Wilson, bootstrap, pass^k, sign test            ~100
-  report.py    terminal, Markdown, HTML (inline SVG)           ~350
+  cli.py       commands and the quickstart flow                ~210 lines
+  config.py    TOML loading, stack defaults, agent extends     ~190
+  git.py       log parsing, base clones, workspaces, diffs     ~170
+  mine.py      candidates, validation, statements, mode        ~140
+  agents.py    built-in adapters, output parsers, prices       ~180
+  run.py       scheduler, timeouts, env, budget, resume        ~180
+  grade.py     capture, reset, test, verdict                   ~50
+  stats.py     Wilson, bootstrap, pass^k, sign test            ~80
+  report.py    terminal, Markdown, HTML (inline SVG)           ~260
 tests/
-  repos.py     builds tiny git repos with known fix commits
-  agents/      fake agents (section 17)
+  repos.py       builds tiny git repos with known fix commits
+  fake_agent.py  fake agents (section 17)
 ```
 
-About 2,000 lines for v0.1.
+About 1,450 lines for v0.1.
 
 ## 17. Testing whichagent itself
 

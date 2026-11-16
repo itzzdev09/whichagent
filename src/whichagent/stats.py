@@ -16,10 +16,14 @@ def wilson(k, n, z=1.96):
 
 
 def bootstrap(rates, reps=2000, seed=0):
-    """95% interval for the mean per-task rate, resampling tasks: runs on one task aren't independent."""
+    """95% interval for the mean per-task rate, resampling tasks: runs on one task aren't independent.
+
+    Never narrower than the task-level Wilson interval: on a few tasks that all score 100%, a plain
+    bootstrap would claim 100%-100%."""
     rnd, n = random.Random(seed), len(rates)
     means = sorted(sum(rnd.choices(rates, k=n)) / n for _ in range(reps))
-    return means[int(0.025 * reps)], means[int(0.975 * reps) - 1]
+    lo, hi = wilson(sum(rates), n)
+    return min(lo, means[int(0.025 * reps)]), max(hi, means[int(0.975 * reps) - 1])
 
 
 def sign_test(wins, losses):
@@ -60,7 +64,8 @@ def summary(results):
             "secs": statistics.median(secs) if secs else None,
             "status": collections.Counter(r["status"] for r in results),
             "tampered": sum(bool(r.get("tampered")) for r in runs),
-            "regressions": sum(r.get("regression") is True for r in runs)}
+            "regressions": sum(r.get("regression") is True for r in runs),
+            "flagged": sum(bool(r.get("flagged")) for r in runs)}  # edited pyproject.toml, package.json, ...
 
 
 def compare(ra, rb):

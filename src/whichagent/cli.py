@@ -26,6 +26,8 @@ def parser():
     common.add_argument("-y", "--yes", action="store_true", default=argparse.SUPPRESS, help="don't ask to confirm")
     common.add_argument("--keep", action="store_true", default=argparse.SUPPRESS,
                         help="keep agent workspaces for inspection")
+    common.add_argument("--retry-errors", action="store_true", default=argparse.SUPPRESS,
+                        help="rerun runs that ended in agent_error or setup_error (e.g. after fixing a login)")
     for sec, keys in c.DEFAULTS.items():  # every config key is also a flag: --max-tasks 40
         for key, v in keys.items():
             kw = {"dest": f"{sec}.{key}", "default": argparse.SUPPRESS, "help": f"[{sec}] {key}"}
@@ -102,7 +104,7 @@ def _need_test(cfg):
 
 def _data(cfg):
     d = c.state(cfg["root"])
-    return c.read_jsonl(d / "tasks.jsonl"), c.read_jsonl(d / "results.jsonl")
+    return c.read_jsonl(d / "tasks.jsonl"), c.latest(c.read_jsonl(d / "results.jsonl"))
 
 
 def cmd_quickstart(cfg, a):
@@ -166,7 +168,8 @@ def cmd_run(cfg, a):
                 return 1
             mark.parent.mkdir(exist_ok=True)
             mark.write_text("yes\n")
-    run.run(cfg, agents, tasks, yes=a.get("yes", False), keep=a.get("keep", False))
+    run.run(cfg, agents, tasks, yes=a.get("yes", False), keep=a.get("keep", False),
+            retry_errors=a.get("retry_errors", False))
     return cmd_report(cfg, a)
 
 

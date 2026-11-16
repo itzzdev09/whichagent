@@ -131,5 +131,5 @@ def mine(cfg, log=print):
             g.STOP.set()
             g.killall()
             raise
-    log(f"{len(tasks)} tasks in {d / 'tasks.jsonl'}")
+    log(f"{len(tasks)} task{'s' * (len(tasks) != 1)} in {d / 'tasks.jsonl'}")
     return tasks

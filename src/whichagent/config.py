@@ -168,6 +168,11 @@ def read_jsonl(path):
     return out
 
 
+def latest(results):
+    """The last result per (task, agent, attempt): a retried run replaces the earlier one."""
+    return list({(r["task"], r["agent"], r["attempt"]): r for r in results}.values())
+
+
 def append_jsonl(path, obj):
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj) + "\n")

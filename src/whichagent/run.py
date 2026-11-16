@@ -58,7 +58,8 @@ def run_one(cfg, task, agent, attempt, keep=False):
     if not exe:
         return {**r, "status": "agent_error", "error": f"{argv[0]} not found on PATH"}
     r["agent_version"] = ag.version(exe)
-    ws = g.workspace(c.state(root) / "bases" / f"{task['id']}.git", cfg["branch"], root.name)
+    bare = g.base_clone(root, task["base"], c.state(root) / "bases" / f"{task['id']}.git", cfg["mine"]["history_depth"])
+    ws = g.workspace(bare, cfg["branch"], root.name)
     try:
         rp = cfg["repo"]
         if rp["setup"]:
@@ -95,13 +96,15 @@ def run_one(cfg, task, agent, attempt, keep=False):
             g.rmtree(ws.parent)
 
 
-def run(cfg, agents, tasks, yes=False, keep=False, log=print):
+def run(cfg, agents, tasks, yes=False, keep=False, retry_errors=False, log=print):
     """Run every (task, agent, attempt) not yet in results.jsonl. Returns the new results."""
     g.STOP.clear()
     rc = cfg["run"]
     path = c.state(cfg["root"]) / "results.jsonl"
     old = c.read_jsonl(path)
-    done = {(x["task"], x["agent"], x["attempt"]) for x in old}
+    errors = ("agent_error", "setup_error")
+    done = {(x["task"], x["agent"], x["attempt"]) for x in c.latest(old)
+            if not (retry_errors and x["status"] in errors)}
     todo = [(t, a, k) for t in tasks for k in range(1, rc["attempts"] + 1) for a in agents
             if (t["id"], a["name"], k) not in done]  # interleaved task by task: a stop leaves agents comparable
     for a in agents:
@@ -111,13 +114,18 @@ def run(cfg, agents, tasks, yes=False, keep=False, log=print):
             if not (cfg["root"] / src).exists():
                 raise SystemExit(f"agent {a['name']!r}: overlay file {src} not found")
     if not todo:
-        log("Nothing to run: every run is already in results.jsonl.")
+        n = sum(x["status"] in errors for x in c.latest(old))
+        log("Nothing to run: every run is already in results.jsonl."
+            + (f" {n} ended in an error; --retry-errors reruns them." if n else ""))
         return []
     costs = {a["name"]: [x["cost_usd"] for x in old if x["agent"] == a["name"] and x["cost_usd"] is not None]
              for a in agents}
     lo = sum(statistics.median(costs[a["name"]]) if costs[a["name"]] else NO_HISTORY[0] for _, a, _ in todo)
     hi = sum(max(costs[a["name"]]) if costs[a["name"]] else NO_HISTORY[1] for _, a, _ in todo)
     log(f"{len(todo)} runs, estimated ${lo:.2f}-${hi:.2f} (stops before passing max_cost ${rc['max_cost']:.2f})")
+    blind = [a["name"] for a in agents if a["parse"] == "none"]
+    if blind:
+        log(f"No cost data from {', '.join(blind)}: their spending isn't counted toward max_cost.")
     if not yes and not c.ask("Continue?"):
         return []
     lock = threading.Lock()

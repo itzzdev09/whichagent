@@ -27,6 +27,7 @@ class Units(unittest.TestCase):
         self.assertEqual(stats.sign_test(0, 0), 1.0)
         lo, hi = stats.bootstrap([1, 1, 0, 0.5, 1, 0])
         self.assertTrue(0 <= lo < 0.58 < hi <= 1)
+        self.assertLess(stats.bootstrap([1.0, 1.0])[0], 0.5)  # 2 tasks can't prove 100%
 
     def test_durations(self):
         self.assertEqual([config.secs(v) for v in ("90", "90s", "30m", "2h")], [90, 90, 1800, 7200])

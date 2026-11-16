@@ -95,6 +95,17 @@ class Pipeline(unittest.TestCase):
         cfg = config.load(self.repo, {"repo": {"setup": "exit 1"}})
         self.assertEqual(run.run_one(cfg, self.tasks[0], cfg["agents"]["noop"], 99)["status"], "setup_error")
 
+    def test_retry_errors(self):
+        noop = [self.cfg["agents"]["noop"]]
+        broken = config.load(self.repo, {"repo": {"setup": "exit 1"}, "run": {"attempts": 2}})
+        self.assertEqual({r["status"] for r in run.run(broken, noop, self.tasks, yes=True, log=quiet)}, {"setup_error"})
+        fixed = config.load(self.repo, {"run": {"attempts": 2}})
+        self.assertEqual(run.run(fixed, noop, self.tasks, yes=True, log=quiet), [])  # errors are kept by default
+        retried = run.run(fixed, noop, self.tasks, yes=True, retry_errors=True, log=quiet)
+        self.assertEqual([(r["attempt"], r["status"]) for r in retried], [(2, "failed")] * 2)
+        latest = [r for r in config.latest(config.read_jsonl(self.state / "results.jsonl")) if r["agent"] == "noop"]
+        self.assertEqual(sorted(r["status"] for r in latest), ["failed"] * 4)
+
     def test_resume_and_budget(self):
         perfect = [self.cfg["agents"]["perfect"]]
         self.assertEqual(run.run(self.cfg, perfect, self.tasks, yes=True, log=quiet), [])
