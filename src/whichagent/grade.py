@@ -44,6 +44,8 @@ def test(cfg, box, ws, files, log, suite=False):
             stale.unlink(missing_ok=True)
     rc, secs = box.shell(command(template, files, box.path(report)), c.secs(rp["test_timeout"]), log)
     found = report if report.exists() else fixed
+    if found and not found.resolve().is_relative_to(ws.parent.resolve()):
+        found = None  # a symlink the agent's code planted, to make this host process read a file of yours
     return rc, secs, testresults.parse(found, log.read_text("utf-8", "replace"), box.roots)
 
 

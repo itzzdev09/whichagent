@@ -12,7 +12,8 @@ def parse(report, log="", roots=()):
     Skipped tests are left out. Paths under roots are made relative, so ids match across workspaces."""
     out = {}
     p = Path(report) if report else None
-    files = sorted(p.rglob("*.xml")) if p and p.is_dir() else [p] if p and p.is_file() else []
+    files = (sorted(f for f in p.rglob("*.xml") if not f.is_symlink()) if p and p.is_dir()  # links lead off
+             else [p] if p and p.is_file() else [])
     for f in files:
         _merge(out, _report(f.read_text("utf-8", "replace")), roots)
     if not files:
