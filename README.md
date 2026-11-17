@@ -78,11 +78,17 @@ The first run detects your stack, writes `whichagent.toml`, mines tasks, shows t
 | `whichagent doctor` | check git, the test suite at HEAD and each agent's flags |
 | `whichagent mine` | find and validate tasks |
 | `whichagent run` | run the matrix (resumable) |
-| `whichagent report` | terminal table, `report.html`, `report.md`, `card.svg` |
+| `whichagent report` | leaderboard, best at / best for, how each agent works: terminal, `report.html`, `report.md`, `card.svg` |
 | `whichagent compare A B` | paired comparison of two agents |
 | `whichagent show <task>` | statement, real fix, each agent's diff |
 
-Every config key is also a flag: `--max-tasks 40`, `--agents claude,gemini`, `--attempts 3`, `--max-cost 10`, `--since 2026-06-01`.
+Every config key is also a flag: `--max-tasks 40`, `--agents claude,gemini`, `--attempts 3`, `--max-cost 10`, `--since 2026-06-01`. `report --merge ../api,../web` combines several repos into one report, and `--agents` narrows it to the agents you name.
+
+### Which agent for which job
+
+The report doesn't stop at one leaderboard. **Best at** names the leader on each axis: most tasks solved, cheapest per fix, fastest fix, fewest tokens per fix, and the agent that stays closest to the files the real fix touched. **Best for** groups the tasks by their real fix (small or large, one file or several, bug fix or feature, language) and says who solved the most in each group, and whether that lead is real or within noise. **How each agent works** lists each agent's median turns, tokens and time to a fix, how often it touched files the real fix didn't, and how often it wrote tests of its own.
+
+`python scripts/share.py OUT REPO...` renders the results as PNGs sized for X, Reddit, LinkedIn and a dev.to cover, in dark and light, with headless Chrome or Edge.
 
 ## Measure your setup, not just the agent
 

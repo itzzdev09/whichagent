@@ -34,6 +34,8 @@ def parser():
          help="report each agent version separately")
     flag("--tasks", metavar="IDS", type=_list, default=argparse.SUPPRESS,
          help="only these tasks (ids or id prefixes, comma-separated), e.g. to try an agent on a free tier")
+    flag("--merge", metavar="DIRS", type=_list, default=argparse.SUPPRESS,
+         help="report: add other repos' tasks and results (comma-separated repo dirs) for one combined report")
     flag("--baseline", metavar="PATH", default=argparse.SUPPRESS,
          help="compare against another results.jsonl (or a dir holding .whichagent/)")
     for sec, keys in c.DEFAULTS.items():  # every config key is also a flag: --max-tasks 40
@@ -111,8 +113,17 @@ def _need_test(cfg):
 
 
 def _data(cfg, a):
-    d = store.state(cfg["root"])
-    return store.read(d / "tasks.jsonl"), store.latest(store.read(d / "results.jsonl"), a.get("by_version", False))
+    """Tasks and latest results, from this repo and any --merge repos (each task remembers its repo)."""
+    tasks, results = [], []
+    for root in [cfg["root"], *(Path(p).resolve() for p in a.get("merge", []))]:
+        d = root / ".whichagent"
+        if root != cfg["root"] and not (d / "tasks.jsonl").exists():
+            raise SystemExit(f"No .whichagent/tasks.jsonl in {root}")
+        tasks += [{**t, "root": str(root)} for t in store.read(d / "tasks.jsonl")]
+        results += store.read(d / "results.jsonl")
+    if names := cfg["run"]["agents"]:  # --agents narrows reports and comparisons too
+        results = [r for r in results if r["agent"] in names]
+    return tasks, store.latest(results, a.get("by_version", False))
 
 
 def _baseline(a):
@@ -209,7 +220,8 @@ def cmd_report(cfg, a):
     tasks, results = _data(cfg, a)
     if not results:
         raise SystemExit("No results yet: run `whichagent run` first")
-    d, name, by, base = store.state(cfg["root"]), cfg["root"].name, a.get("by_version", False), _baseline(a)
+    d, by, base = store.state(cfg["root"]), a.get("by_version", False), _baseline(a)
+    name = " + ".join(dict.fromkeys(Path(t["root"]).name for t in tasks)) or cfg["root"].name
     print(report.terminal(tasks, results, base, by))
     (d / "report.md").write_text(report.markdown(tasks, results, name, base, by), "utf-8")
     (d / "report.html").write_text(report.page(cfg, tasks, results, by), "utf-8")

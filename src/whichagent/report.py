@@ -4,6 +4,9 @@ import datetime
 import html
 import itertools
 import json
+import re
+import statistics
+from pathlib import Path
 
 from . import git as g, stats, store
 
@@ -109,8 +112,15 @@ def terminal(tasks, results, baseline=None, by_version=False):
         return "No graded runs yet."
     head, body = _table(rows)
     out = [_text([head, *body])]
-    if pairs:
-        out += ["", _text([_verdict(*p) for p in pairs])]
+    if pairs:  # with many agents, only the pairs that differ (report.md and report.html list them all)
+        shown = pairs if len(pairs) <= 6 else [p for p in pairs if p[-1] < 0.05]
+        out += ["", _text([_verdict(*p) for p in shown]) if shown else "No pair of agents differs by more than noise."]
+        if shown and len(shown) < len(pairs):
+            out.append(f"The other {len(pairs) - len(shown)} pairs: no real difference.")
+    if lines := best_at(rows, per, pairs):
+        out += ["", "Best at:", _text(lines)]
+    if groups := best_for(tasks, per):
+        out += ["", "Best for:", _text(groups)]
     if baseline and (vs := versus(per, baseline, by_version)):
         out += ["", "Against the baseline:", _text(vs)]
     return "\n".join(out + [""] + _notes(rows, per, by_version)).rstrip()
@@ -130,6 +140,122 @@ def _title(t, n=70):
     return line if len(line) <= n else line[: n - 3] + "..."
 
 
+FIX_WORDS = re.compile(r"\b(fix\w*|bug\w*|crash\w*|error\w*|incorrect\w*|wrong|regression\w*|broken|fail\w*|"
+                       r"should ?n[o']t|does ?n[o']t|not work\w*)\b", re.I)
+LANGS = {"py": "Python", "js": "JS/TS", "mjs": "JS/TS", "cjs": "JS/TS", "jsx": "JS/TS", "ts": "JS/TS", "mts": "JS/TS",
+         "tsx": "JS/TS", "go": "Go", "rs": "Rust", "java": "Java/Kotlin", "kt": "Java/Kotlin"}
+MIN_GROUP = 3  # a category with fewer tasks says nothing
+
+
+def kinds(t):
+    """A task's categories, read off its real fix: size, files touched, bug fix or feature (a keyword guess on the
+    statement's first line) and language."""
+    n, files = t.get("fix_lines") or 0, t.get("source_files") or []
+    langs = {LANGS.get(f.rsplit(".", 1)[-1]) for f in files} - {None}
+    out = {"size": "small fix (up to 10 lines)" if n <= 10 else "medium fix (11-50 lines)" if n <= 50
+           else "large fix (over 50 lines)",
+           "files": "fix in one file" if len(files) == 1 else "fix across files",
+           "kind": "bug fix" if FIX_WORDS.search(_title(t, 300)) else "feature or change"}
+    if len(langs) == 1:
+        out["language"] = langs.pop()
+    return out
+
+
+def best_for(tasks, per):
+    """[category, tasks, best, verdict] for each kind of task: who solved the most, and whether that lead over the
+    next agent is more than noise (sign test on the category's tasks). Skips categories with too few tasks and
+    kinds all tasks share."""
+    groups = collections.defaultdict(set)
+    for t in tasks:
+        for k, v in kinds(t).items():
+            groups[k, v].add(t["id"])
+    out = []
+    for (k, v), ids in sorted(groups.items()):
+        if len(ids) < MIN_GROUP or sum(kk == k for kk, _ in groups) < 2:
+            continue
+        sub = {n: [r for r in rs if r["task"] in ids] for n, rs in per.items()}
+        ranked = sorted(((s["rate"], n, s) for n, rs in sub.items() if (s := stats.summary(rs))), key=lambda x: -x[0])
+        if len(ranked) < 2:
+            continue
+        (top, a, sa), (_, b, _) = ranked[:2]
+        lead = [n for rate, n, _ in ranked if rate == top]
+        if top == 0:
+            verdict = "nobody solved these"
+        elif len(lead) > 1:
+            verdict = "tied"
+        else:
+            p = stats.compare(sub[a], sub[b])[3]
+            verdict = f"ahead of {b} (p = {p:.2g})" if p < 0.05 else f"within noise of {b} (p = {p:.2g})"
+        out.append([v, str(len(ids)), ", ".join(lead) + f" {sa['solved']}/{sa['runs']}", verdict])
+    return out
+
+
+def _median(xs):
+    xs = [x for x in xs if x is not None]
+    return statistics.median(xs) if xs else None
+
+
+def _secs(x):
+    return "-" if x is None else f"{int(x // 60)}m {int(x % 60):02d}s"
+
+
+def _k(x):
+    return "-" if x is None else f"{x / 1000:.0f}k" if x >= 1000 else f"{x:.0f}"
+
+
+def _habits(rs):
+    """One agent's working habits from its graded runs."""
+    rs = [r for r in rs if r["status"] != "setup_error"]
+    done = [r for r in rs if r["status"] != "timeout"]  # a killed run never printed its usage
+    toks = [r["tokens_in"] + r["tokens_out"] for r in done if r.get("tokens_in") is not None
+            and r.get("tokens_out") is not None]
+    fixed = [r for r in rs if r["status"] == "solved"]
+    return {"turns": _median(r.get("turns") for r in done), "tokens": _median(toks),
+            "per_fix": sum(toks) / len(fixed) if fixed and len(toks) == len(done) and sum(toks) else None,
+            "fix_secs": _median(r["secs"] for r in fixed),
+            "strays": sum(bool(r.get("extra_files")) for r in rs) / len(rs) if rs else None,
+            "tests": sum(bool(r.get("wrote_tests")) for r in rs) / len(rs) if rs else None}
+
+
+def profile(rows, per):
+    """How each agent works: median turns and tokens per run, median time to a fix, how often it touched files the
+    real fix didn't, and how often it wrote tests of its own."""
+    out = [["agent", "turns", "tokens/run", "time to fix", "touched other files", "wrote tests"]]
+    for n, _ in rows:
+        h = _habits(per[n])
+        out.append([n, _k(h["turns"]), _k(h["tokens"]), _secs(h["fix_secs"]),
+                    "-" if h["strays"] is None else _pct(h["strays"]), "-" if h["tests"] is None else _pct(h["tests"])])
+    return out
+
+
+def best_at(rows, per, pairs):
+    """[what, who]: the leader on each axis, among agents that fixed something."""
+    fixers = [(n, s, _habits(per[n])) for n, s in rows if s["solved"]]
+    if not fixers:
+        return []
+
+    def lead(key, fmt):
+        vals = [(v, n) for n, s, h in fixers if (v := key(s, h)) is not None]
+        if not vals:
+            return None
+        best = min(v for v, _ in vals)
+        return ", ".join(n for v, n in vals if v == best) + f" ({fmt(best)})"
+    out = []
+    (a, sa), b = rows[0], rows[1][0] if len(rows) > 1 else None
+    p = next((x[-1] for x in pairs if {x[0], x[1]} == {a, b}), None)
+    if b is None or sa["rate"] > rows[1][1]["rate"]:
+        note = "" if p is None else f", ahead of {b}" if p < 0.05 else f", within noise of {b}"
+        out.append(["most tasks solved", f"{a} ({sa['solved']}/{sa['runs']}{note})"])
+    for what, key, fmt in (
+            ("cheapest per fix", lambda s, h: s["per_solved"] if s["cost_complete"] else None, _money),
+            ("fastest fix", lambda s, h: h["fix_secs"], _secs),
+            ("fewest tokens per fix", lambda s, h: h["per_fix"], _k),
+            ("stays closest to the fix", lambda s, h: h["strays"], lambda x: f"touched other files in {_pct(x)} of runs")):
+        if who := lead(key, fmt):
+            out.append([what, who])
+    return out
+
+
 def markdown(tasks, results, name, baseline=None, by_version=False):
     rows, pairs, per = analyze(tasks, results, by_version)
     if not rows:
@@ -139,6 +265,12 @@ def markdown(tasks, results, name, baseline=None, by_version=False):
     md = [f"# whichagent: {name}", "", f"{len(tasks)} tasks, {runs} runs.", "", _md([head, *body])]
     if pairs:
         md += ["", "## Head to head", "", _md([["pair", "record", "verdict"], *[_verdict(*p) for p in pairs]])]
+    if lines := best_at(rows, per, pairs):
+        md += ["", "## Best at", "", _md([["", "agent"], *lines])]
+    if groups := best_for(tasks, per):
+        md += ["", "## Best for", "", "Tasks grouped by their real fix. A lead within noise could go either way.", "",
+               _md([["tasks", "n", "most solved", "verdict"], *groups])]
+    md += ["", "## How each agent works", "", _md(profile(rows, per))]
     if baseline and (vs := versus(per, baseline, by_version)):
         md += ["", "## Against the baseline", "", _md([["agent", "solve rate", "tasks", "verdict"], *vs])]
     md += ["", *_notes(rows, per, by_version)]
@@ -162,7 +294,7 @@ def card(tasks, results, name, by_version=False):
            ".bar{fill:#4493f8}.track{fill:#21262d}}</style>"
            f'<rect class="bg" x=".5" y=".5" width="{w - 1}" height="{h - 1}" rx="8"/>'
            f'<text class="t" x="16" y="28">whichagent · {esc(name)}</text>'
-           f'<text class="m" x="16" y="48">{len(tasks)} tasks from this repo\'s history, graded by its own tests</text>']
+           f'<text class="m" x="16" y="48">{len(tasks)} past fixes from git history, graded by the repo\'s own tests</text>']
     for i, (n, s) in enumerate(rows):
         y = 78 + 30 * i
         out.append(f'<text x="16" y="{y}">{esc(n[:24])}</text>'
@@ -208,18 +340,20 @@ def _chart(rows):
 def page(cfg, tasks, results, by_version=False):
     """report.html: leaderboard, cost chart with the efficient frontier, task grid with diffs side by side."""
     rows, pairs, per = analyze(tasks, results, by_version)
-    root, esc = cfg["root"], html.escape
+    esc = html.escape
+    roots = {t["id"]: Path(t.get("root") or cfg["root"]) for t in tasks}  # report --merge brings other repos' tasks
     names = [n for n, _ in rows]
     data = {"tasks": {}, "runs": {}}
     for t in tasks:
         try:
-            fix = g.git(root, "show", "--format=", "--no-color", "--no-ext-diff", t["fix"])
+            fix = g.git(roots[t["id"]], "show", "--format=", "--no-color", "--no-ext-diff", t["fix"])
         except RuntimeError:
             fix = "(fix commit not found)"
         data["tasks"][t["id"]] = {"statement": t["statement"], "fix": fix[:CAP]}
     for n in names:
         for r in sorted(per[n], key=lambda r: r["attempt"]):
-            f = store.run_dir(root, r["task"], r["agent"], r.get("agent_version"), r["attempt"]) / "agent.diff"
+            f = (store.run_dir(roots[r["task"]], r["task"], r["agent"], r.get("agent_version"), r["attempt"])
+                 / "agent.diff")
             data["runs"].setdefault(f"{r['task']}|{n}", []).append(
                 {"attempt": r["attempt"], "status": r["status"],
                  "diff": f.read_text("utf-8", "replace")[:CAP] if f.exists() else ""})
@@ -245,8 +379,19 @@ def page(cfg, tasks, results, by_version=False):
     when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     payload = json.dumps(data).replace("<", "\\u003c")
     runs = sum(s["runs"] for _, s in rows)
-    return PAGE.format(name=esc(root.name), when=when, ntasks=len(tasks), nruns=runs, table=table,
+
+    def rows_html(rs, head=False):
+        cell = "th" if head else "td"
+        return "".join("<tr>" + "".join(f"<{cell}>{esc(str(x))}</{cell}>" for x in r) + "</tr>" for r in rs)
+    groups = best_for(tasks, per)
+    best = (f"<table>{rows_html(best_at(rows, per, pairs))}</table>"
+            + (f"<h4>Best for</h4><table>{rows_html([['tasks', 'n', 'most solved', 'verdict']], True)}"
+               f"{rows_html(groups)}</table>" if groups else ""))
+    habits = profile(rows, per)
+    name = " + ".join(dict.fromkeys(p.name for p in roots.values())) or cfg["root"].name
+    return PAGE.format(name=esc(name), when=when, ntasks=len(tasks), nruns=runs, table=table,
                        notes=notes, verdicts=verdicts or "<tr><td>Only one agent: nothing to compare.</td></tr>",
+                       best=best, habits=rows_html(habits[:1], True) + rows_html(habits[1:]),
                        chart=_chart(rows), grid=grid, data=payload, js=JS, css=CSS)
 
 
@@ -301,6 +446,10 @@ PAGE = """<!doctype html>
 <h2>Leaderboard</h2><div class="wrap"><table>{table}</table></div>{notes}
 <h2>Head to head</h2><p class="mute">A wins a task when it solves it more often. Sign test on wins vs losses.</p>
 <div class="wrap"><table>{verdicts}</table></div>
+<h2>Best at, best for</h2><p class="mute">Tasks are grouped by their real fix. A lead within noise could go either way.</p>
+<div class="wrap">{best}</div>
+<h2>How each agent works</h2><p class="mute">Medians over its runs. Other files: files the real fix didn't touch.</p>
+<div class="wrap"><table>{habits}</table></div>
 <h2>Solve rate vs cost</h2><p class="mute">The dashed line is the efficient frontier: nothing else is both cheaper and better.</p>
 {chart}
 <h2>Tasks</h2><p class="mute">Click a cell to see the agent's diff next to the real fix.</p>

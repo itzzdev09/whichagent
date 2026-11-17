@@ -172,6 +172,22 @@ class Reports(unittest.TestCase):
         self.assertEqual(len(store.latest(retried)), 2)
         self.assertEqual(len(store.latest(retried, by_version=True)), 3)
 
+    def test_best_for_and_best_at(self):
+        tasks = [{"id": f"t{i}", "statement": "Fix crash on empty input" if i < 4 else "Add a --quiet option",
+                  "fix_lines": 5 if i < 4 else 80, "source_files": ["a.py"]} for i in range(8)]
+        rs = ([result(t["id"], "a", "1", "solved") for t in tasks]
+              + [result(t["id"], "b", "1", "solved" if i >= 4 else "failed", cost=0.0) for i, t in enumerate(tasks)])
+        rows, pairs, per = report.analyze(tasks, rs)
+        groups = {g[0]: g[1:] for g in report.best_for(tasks, per)}
+        self.assertEqual(groups["bug fix"], ["4", "a 4/4", "within noise of b (p = 0.12)"])  # 4 wins of 4: p = 1/8
+        self.assertEqual(groups["feature or change"][2], "tied")
+        self.assertEqual(groups["large fix (over 50 lines)"][2], "tied")
+        self.assertNotIn("Python", groups)  # every task is Python: nothing to tell apart
+        best = dict(report.best_at(rows, per, pairs))
+        self.assertEqual(best["most tasks solved"], "a (8/8, within noise of b)")
+        self.assertEqual(best["cheapest per fix"], "b ($0.00)")
+        self.assertIn("Best for:", report.terminal(tasks, rs))
+
     def test_card_and_baseline(self):
         now = [result("t1", "claude", "1", "solved"), result("t2", "claude", "1", "solved")]
         then = [result("t1", "claude", "1", "failed"), result("t2", "claude", "1", "failed")]

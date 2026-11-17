@@ -255,7 +255,10 @@ Standard library only (`math`, `random`).
 
 ## 11. Reports
 
-- **Terminal**: the leaderboard and the pairwise verdicts.
+- **Terminal**: the leaderboard, the pairwise verdicts (only the pairs that differ, past 4 agents), best at and best for.
+- **Best at / best for / how each agent works**: the leader on each axis (solves, $ per fix, time to fix, tokens per fix, staying inside the real fix's files); per kind of task (size of the real fix, files, bug fix or feature by a keyword guess, language; groups under 3 tasks are skipped), the agent that solved the most and a paired sign test against the next one; and each agent's median turns, tokens, time to a fix, share of runs touching other files and writing tests.
+- **Several repos**: `report --merge DIRS` reads other repos' `.whichagent/` into one report; `--agents` narrows any report.
+- **Share images**: `scripts/share.py` renders the same numbers as PNGs for X, Reddit, LinkedIn and dev.to (headless Chrome or Edge).
 - **`report.html`**: one self-contained file (inline CSS, JS and SVG, no CDN, works offline, light and dark). It has the leaderboard, a cost-vs-solve-rate chart showing which agents are on the efficient frontier, and a task × agent grid: click a cell to see the agent's diff next to the real fix.
 - **`report.md`**: paste into a PR, an issue or a post.
 - **`card.svg`**: a small leaderboard to share or put in a README; it follows the viewer's light or dark theme.
