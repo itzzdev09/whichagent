@@ -1,5 +1,6 @@
 """whichagent command line: quickstart, init, doctor, mine, run, report, compare, show."""
 import argparse
+import re
 import shutil
 import sys
 import tempfile
@@ -244,12 +245,17 @@ def cmd_show(cfg, a):
     if not t:
         raise SystemExit(f"No task {a['task']}")
     graded = f"{len(t['fail_to_pass'])} tests must flip" if t.get("fail_to_pass") else "graded by exit code"
-    print(f"Task {t['id']} ({t['mode']} tests, {graded}, statement from {t['statement_source']})\n\n{t['statement']}\n")
-    print("=== Real fix\n" + g.git(cfg["root"], "show", "--format=", "--no-color", "--no-ext-diff", t["fix"]))
+    out = [f"Task {t['id']} ({t['mode']} tests, {graded}, statement from {t['statement_source']})\n\n{t['statement']}\n",
+           "=== Real fix\n" + g.git(cfg["root"], "show", "--format=", "--no-color", "--no-ext-diff", t["fix"])]
     for r in sorted((r for r in results if r["task"] == t["id"]), key=lambda r: (r["agent"], r["attempt"])):
         f = store.run_dir(cfg["root"], t["id"], r["agent"], r.get("agent_version"), r["attempt"]) / "agent.diff"
-        print(f"=== {r['agent']}, attempt {r['attempt']}: {r['status']}\n"
-              + (f.read_text("utf-8", "replace") if f.exists() else "(no diff)\n"))
+        out.append(f"=== {r['agent']}, attempt {r['attempt']}: {r['status']}\n"
+                   + (f.read_text("utf-8", "replace") if f.exists() else "(no diff)\n"))
+    # issue text and agent diffs are anyone's words: no escape sequences reach your terminal
+    print(CONTROL.sub("", "\n".join(out)))
+
+
+CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")  # all but tab and newline
 
 
 COMMANDS = {"quickstart": cmd_quickstart, "doctor": cmd_doctor, "mine": cmd_mine, "run": cmd_run,

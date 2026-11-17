@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import tests  # noqa: F401  (puts src/ on sys.path)
-from whichagent import agents, config, git, grade, report, sandbox, stacks, stats, store, testresults
+from whichagent import agents, cli, config, git, grade, report, sandbox, stacks, stats, store, testresults
 
 CFG = {"root": Path("."), "prices": {"gpt-x": {"input": 1.0, "output": 10.0, "cache_read": 0.1},
                                      "gem-x": {"input": 2.0, "output": 20.0}}}
@@ -270,6 +270,7 @@ class Security(unittest.TestCase):
             store.tasks(d)
 
     def test_untrusted_text_is_defused(self):
+        self.assertEqual(cli.CONTROL.sub("", "a\x1b]52;c;cHduZWQ=\x07b\tc\r\nd\x9b2J"), "a]52;c;cHduZWQ=b\tc\nd2J")
         t = {"id": "abc1234", "statement": "@everyone see [this](https://evil.example) `now`", "source_files": []}
         md = report.markdown([t], [result("abc1234", "claude", "1", "solved")], "x")
         self.assertIn("| `@everyone see [this](https://evil.example) 'now'` |", md)
