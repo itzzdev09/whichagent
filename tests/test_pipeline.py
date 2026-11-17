@@ -158,6 +158,10 @@ class Pipeline(unittest.TestCase):
         local = {**self.cfg["agents"]["noop"], "name": "noop-local", "args": "--model ollama/x"}
         cfg = config.load(self.repo, {"run": {"max_cost": 0.5, "jobs": 1}})
         self.assertEqual(len(run.run(cfg, [local], self.tasks, yes=True, log=quiet)), len(self.tasks))
+        # a paid agent whose runs report no cost counts at its $1.00 guess, not $0: max_cost still holds
+        unpriced = {**self.cfg["agents"]["noop"], "name": "noop-unpriced", "parse": "opencode-json"}
+        cfg = config.load(self.repo, {"run": {"max_cost": 1.5, "jobs": 1}})
+        self.assertEqual(len(run.run(cfg, [unpriced], self.tasks, yes=True, log=quiet)), 1)
 
     def test_cli_report_show_compare(self):
         out = io.StringIO()

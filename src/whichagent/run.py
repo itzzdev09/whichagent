@@ -135,8 +135,8 @@ def run(cfg, agents, tasks, yes=False, keep=False, retry_errors=False, new_versi
                     budget["inflight"] -= est
             if sb.STOP.is_set():
                 return
-            with lock:
-                budget["spent"] += r["cost_usd"] or 0
+            with lock:  # a run that ran but reported no cost (killed at its timeout, say) counts at its estimate
+                budget["spent"] += r["cost_usd"] if r["cost_usd"] is not None else est if r["secs"] is not None else 0
                 if r["cost_usd"] is not None:
                     xs.append(r["cost_usd"])
                 store.append(path, r)
