@@ -117,12 +117,20 @@ def diff(ws, tree):
 
 
 def put(repo, sha, paths, ws):
-    """Make paths in ws match commit sha of repo, deleting the ones absent there."""
+    """Make paths in ws match commit sha of repo, deleting the ones absent there.
+
+    Never writes or deletes outside ws: the agent may have swapped a file or a folder for a symlink."""
+    top = Path(ws).resolve()
     for p in paths:
-        data, f = show(repo, sha, p), Path(ws, p)
-        if data is None:
-            f.unlink(missing_ok=True)
+        f = Path(ws, p)
+        if not f.parent.resolve().is_relative_to(top):
+            raise RuntimeError(f"{p} leads outside the workspace")
+        if f.is_dir() and not f.is_symlink():
+            rmtree(f)
         else:
+            f.unlink(missing_ok=True)  # a symlink goes, not what it points to
+        data = show(repo, sha, p)
+        if data is not None:
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(data)
 

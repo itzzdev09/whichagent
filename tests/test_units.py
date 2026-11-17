@@ -234,6 +234,30 @@ class Security(unittest.TestCase):
         box.git_ro = True  # what box.agent() sets
         self.assertIn(f"{ws / '.git'}:/wa/repo/.git:ro", box.argv("n2"))
 
+    def test_put_stays_in_the_workspace(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(git.rmtree, tmp)
+        repo, ws, outside = tmp / "repo", tmp / "ws", tmp / "outside"
+        for d in (repo / "tests", ws, outside):
+            d.mkdir(parents=True)
+        (repo / "tests" / "t.py").write_text("real")
+        git.git(repo, "init", "-q")
+        git.git(repo, "add", "-A")
+        git.git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x")
+        with self.assertRaises(RuntimeError):
+            git.put(repo, "HEAD", ["../outside/t.py"], ws)
+        try:  # an agent swaps the tests folder, or a test file, for a symlink out of the workspace
+            (ws / "tests").symlink_to(outside, target_is_directory=True)
+            (outside / "victim").write_text("mine")
+            (ws / "v.py").symlink_to(outside / "victim")
+        except OSError:
+            self.skipTest("no symlinks without Windows developer mode")
+        with self.assertRaises(RuntimeError):
+            git.put(repo, "HEAD", ["tests/t.py"], ws)
+        git.put(repo, "HEAD", ["v.py"], ws)  # absent at HEAD: the link goes, its target stays
+        self.assertEqual(((outside / "victim").read_text(), (ws / "v.py").exists()), ("mine", False))
+        self.assertEqual(sorted(p.name for p in outside.iterdir()), ["victim"])
+
 
 
 if __name__ == "__main__":
