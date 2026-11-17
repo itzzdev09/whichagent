@@ -191,6 +191,9 @@ class Pipeline(unittest.TestCase):
             return {**cfg["agents"]["noop"], "name": f"docker-{kind}", "cmd": f"python /fake/fake_agent.py {kind}",
                     "env": env or {}}
         self.assertEqual(run.run_one(cfg, self.div, agent("perfect"), 1)["status"], "solved")
+        pwned = self.tmp / "pwned.txt"  # git runs on the host: a .git/config the agent wrote must not run there
+        run.run_one(cfg, self.div, agent("hooker", {"WA_PWNED": pwned.as_posix()}), 1)
+        self.assertFalse(pwned.exists())
         for kind, env in (("escaper", {"WA_SENTINEL": str(sentinel)}), ("peeker", {})):
             r = run.run_one(cfg, self.div, agent(kind, env), 1)
             seen = json.loads((store.run_dir(self.repo, r["task"], r["agent"], r["agent_version"], 1)

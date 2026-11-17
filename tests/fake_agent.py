@@ -1,6 +1,6 @@
 """Fake agents with known behavior, for testing whichagent without API spend (ARCHITECTURE.md section 17).
 
-Usage: fake_agent.py perfect|noop|tamper|breaker|sleeper|peeker|escaper. They know the bugs in tests/repos.py.
+Usage: fake_agent.py perfect|noop|tamper|breaker|sleeper|peeker|escaper|hooker. They know the bugs in tests/repos.py.
 """
 import json
 import os
@@ -36,6 +36,8 @@ def main(kind):
     if kind == "escaper":  # host mode can't stop this one (see ARCHITECTURE.md section 14); docker mode must
         target = Path(os.environ["WA_SENTINEL"])
         print(json.dumps({"read": target.read_text() if target.exists() else None}), file=sys.stderr)
+    if kind == "hooker":  # docker mode: the host's `git add` must never run this
+        subprocess.run(["git", "config", "core.fsmonitor", f"echo pwned > '{os.environ['WA_PWNED']}'; false"])
     if kind == "peeker":  # reports what it can see; the test decides whether anything leaked
         log = subprocess.run(["git", "log", "--all", "--format=%H"], capture_output=True, text=True).stdout.split()
         objects = subprocess.run(["git", "cat-file", "--batch-all-objects", "--batch"], capture_output=True).stdout

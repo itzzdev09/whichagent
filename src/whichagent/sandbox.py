@@ -131,6 +131,9 @@ class Docker:
         self.mounts = [os.path.expanduser(m) for m in mounts]
         self.cwd = f"/wa/{self.ws.name}"
         self.roots = [self.cwd]
+        # From the agent's start on, .git is read-only in the container: git runs on the host, so a .git/config
+        # the agent wrote (core.fsmonitor, filter drivers) would run its commands there.
+        self.git_ro = False
 
     def path(self, p):
         return "/wa/" + Path(p).relative_to(self.ws.parent).as_posix()
@@ -145,6 +148,8 @@ class Docker:
         a = ["docker", "run", "--rm", "--name", name, "-v", f"{self.ws.parent}:/wa", "-w", self.cwd,
              # the container runs as root and the mount is owned by you: without this, git refuses the workspace
              "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*"]
+        if self.git_ro:
+            a += ["-v", f"{self.ws / '.git'}:{self.cwd}/.git:ro"]
         for m in self.mounts:
             a += ["-v", m]
         for k in env:  # by name only: values travel in the docker CLI's environment, not on its command line
@@ -157,6 +162,7 @@ class Docker:
 
     def agent(self, argv, timeout, out, err, env, stdin):
         name = _name()
+        self.git_ro = True  # also for the tests after it, which run the agent's code
         return proc(self.argv(name, sorted(env), stdin is not None) + list(argv), self.ws, timeout, out, err=err,
                     env={**os.environ, **env}, stdin=stdin, container=name)
 

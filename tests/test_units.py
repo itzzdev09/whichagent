@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import tests  # noqa: F401  (puts src/ on sys.path)
-from whichagent import agents, config, grade, report, sandbox, stacks, stats, store, testresults
+from whichagent import agents, config, git, grade, report, sandbox, stacks, stats, store, testresults
 
 CFG = {"root": Path("."), "prices": {"gpt-x": {"input": 1.0, "output": 10.0, "cache_read": 0.1},
                                      "gem-x": {"input": 2.0, "output": 20.0}}}
@@ -222,6 +222,18 @@ class Sandbox(unittest.TestCase):
     def test_jsonc(self):
         text = '{\n  // comment\n  "image": "a//b", /* block */ "x": [1, 2,],\n  "s": "q\\"//"\n}'
         self.assertEqual(json.loads(sandbox.jsonc(text)), {"image": "a//b", "x": [1, 2], "s": 'q"//'})
+
+
+class Security(unittest.TestCase):
+    """What agents, issue text and crafted files must not get past (ARCHITECTURE.md section 14)."""
+
+    def test_agent_cant_write_git_config_seen_by_the_host(self):
+        ws = Path(tempfile.gettempdir()) / "tmpx" / "repo"
+        box = sandbox.Docker(ws, "img:1")
+        self.assertFalse(any(":ro" in a for a in box.argv("n1")))  # install and setup may write .git
+        box.git_ro = True  # what box.agent() sets
+        self.assertIn(f"{ws / '.git'}:/wa/repo/.git:ro", box.argv("n2"))
+
 
 
 if __name__ == "__main__":
