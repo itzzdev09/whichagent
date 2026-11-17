@@ -209,7 +209,7 @@ jobs:
     permissions: { contents: read, pull-requests: write }
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }   # mining needs the history
+        with: { fetch-depth: 0, persist-credentials: false }   # mining needs the history; agents don't need the token
       - run: npm install -g @anthropic-ai/claude-code
       - uses: actions/cache/restore@v4
         if: github.event_name == 'pull_request'
@@ -228,6 +228,8 @@ jobs:
 ```
 
 So that agents see the pull request's CLAUDE.md rather than the one in each old commit, add `overlay = { "CLAUDE.md" = "CLAUDE.md" }` to the agent in `whichagent.toml`.
+
+Keep it on `pull_request`, never `pull_request_target`: a pull request's `whichagent.toml` runs commands, so it must not run where your secrets are.
 
 ## FAQ
 
