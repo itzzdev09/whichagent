@@ -126,7 +126,8 @@ An adapter is a few lines of TOML, so adding your favorite agent makes a good fi
 | Gemini CLI | `gemini --output-format json --yolo` | tokens x models.dev prices | unverified |
 | Qwen Code | `qwen --output-format json --yolo` | tokens x models.dev prices | unverified |
 | Aider | `aider --message-file ... --yes-always` | parsed from its output; $0 for local models | verified |
-| OpenCode, Goose, Amp, Copilot CLI, Cursor CLI | headless mode, prompt on stdin or a file | time and pass/fail only | unverified |
+| OpenCode | `opencode run --auto --format json` | reported by the CLI | verified |
+| Goose, Amp, Copilot CLI, Cursor CLI | headless mode, prompt on stdin or a file | time and pass/fail only | unverified |
 | Anything else | any command; the prompt arrives on stdin or as `{prompt_file}` | optional | |
 
 Unverified adapters follow each CLI's docs but haven't been run by whichagent yet; `whichagent doctor` checks their flags on your machine. Several of these agents have free tiers or free models, which makes them cheap to compare. Agents get only an allowlist of environment variables; pass anything else with `env = { TOKEN = "$MY_TOKEN" }`, which reads it from your shell.
@@ -136,15 +137,31 @@ Unverified adapters follow each CLI's docs but haven't been run by whichagent ye
 whichagent itself is free and local. To benchmark without paying anyone, use open-source agents with local models, or free tiers:
 
 ```toml
-# Aider + a local Ollama model: no account, no API bill (untested starting point)
+# Aider + a local Ollama model: no account, no API bill
 [[agent]]
-name    = "aider + qwen2.5-coder"
+name    = "aider-qwen7b"
 extends = "aider"
-args    = "--model ollama_chat/qwen2.5-coder:7b"
+args    = "--model ollama_chat/qwen2.5-coder:7b --no-show-model-warnings"
 env     = { OLLAMA_API_BASE = "http://127.0.0.1:11434" }
+
+# OpenCode with one of its free models (`opencode models | grep free`): no account
+[[agent]]
+name    = "opencode-free"
+extends = "opencode"
+args    = "-m opencode/deepseek-v4.1-flash-free"
+
+# Qwen Code against Ollama's OpenAI-compatible endpoint
+[[agent]]
+name    = "qwen-local"
+extends = "qwen"
+args    = "--auth-type openai"
+env     = { OPENAI_BASE_URL = "http://127.0.0.1:11434/v1", OPENAI_API_KEY = "ollama", OPENAI_MODEL = "qwen2.5-coder:7b" }
+
+[prices]
+"qwen2.5-coder:7b" = { input = 0, output = 0 }   # so the report shows $0 instead of "no cost"
 ```
 
-Gemini CLI also has a free tier when you sign in with a Google account (rate-limited; use a small `--max-tasks`). Local runs report no cost; `[run] max_cost` only matters for paid agents.
+Aider and OpenCode setups above have been run end to end. Small local models are weak agents: on commander.js, qwen2.5-coder:7b solved nothing through Aider and made no tool calls through Qwen Code, while OpenCode's free model solved 1 of 2 tasks. Gemini CLI and GitHub Copilot have free tiers when you sign in; free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Aider prices Ollama, LM Studio and llamafile models at $0 itself; `[run] max_cost` only matters for paid agents.
 
 ## Stacks
 
@@ -216,7 +233,7 @@ So that agents see the pull request's CLAUDE.md rather than the one in each old 
 
 ## Status
 
-Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code, Codex and Aider adapters have been run end to end (Aider with a local Ollama model, at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
+Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code, Codex, OpenCode and Aider adapters have been run end to end (OpenCode with a free model and Aider with a local Ollama model, both at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
 
 ## Contributing
 

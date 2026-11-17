@@ -47,7 +47,7 @@ BUILTIN = {
                      " --no-check-update --no-show-release-notes --analytics-disable --no-pretty",
               "stdin": False, "parse": "aider-text"},
     "qwen": {"cmd": "qwen --output-format json --yolo", "parse": "gemini-json", "unverified": True},
-    "opencode": {"cmd": "opencode run --auto --format json", "parse": "opencode-json", "unverified": True},
+    "opencode": {"cmd": "opencode run --auto --format json", "parse": "opencode-json"},
     "goose": {"cmd": "goose run --no-session --instructions {prompt_file}", "stdin": False, "unverified": True},
     "amp": {"cmd": "amp --execute --dangerously-allow-all", "unverified": True},
     "copilot": {"cmd": "copilot --allow-all-tools", "unverified": True},

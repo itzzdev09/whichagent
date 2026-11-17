@@ -213,13 +213,13 @@ Built-in adapters. `whichagent doctor` checks each adapter's flags against the i
 | Gemini CLI | `gemini --output-format json --yolo` | stdin | `stats` tokens × prices |
 | Aider | `aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore` (plus quiet flags) | file | the "Cost: ... session" line; $0 for local models (ollama, lm_studio, llamafile) |
 | Qwen Code | `qwen --output-format json --yolo` | stdin | `stats` tokens × prices |
-| OpenCode | `opencode run` | stdin | none yet |
+| OpenCode | `opencode run --auto --format json` | stdin | `cost` on each step_finish event |
 | Goose | `goose run --no-session --instructions {prompt_file}` | file | none yet |
 | Amp | `amp --execute --dangerously-allow-all` | stdin | none yet |
 | GitHub Copilot CLI | `copilot --allow-all-tools` | stdin | none yet |
 | Cursor CLI | `cursor-agent --print --force --output-format json` | stdin | none yet |
 
-Claude Code, Codex and Aider have been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
+Claude Code, Codex, OpenCode and Aider have been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
 
 ## 8. Grading
 
