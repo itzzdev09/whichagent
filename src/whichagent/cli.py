@@ -14,7 +14,9 @@ SAFETY = """whichagent runs coding agents unattended, with their permission prom
   - agents get an allowlist of environment variables, not your whole shell
   - runs are killed at their timeout, and no run starts that would pass max_cost
 On the host this is not a sandbox: an agent can still read and write whatever your user account can,
-and reach the network. --sandbox docker runs setup, agents and tests in a container that sees only the workspace."""
+and reach the network. --sandbox docker runs setup, agents and tests in a container that sees only the workspace.
+Task statements come from commit messages and GitHub issues, which anyone can write, and a hostile one can
+steer an agent. On a repo you don't control, use --sandbox docker and API keys with a low spend limit."""
 
 
 def _list(s):

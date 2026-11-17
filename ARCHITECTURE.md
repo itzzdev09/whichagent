@@ -361,6 +361,16 @@ Not covered on the host: files in your home directory are still reachable, and s
 
 **Docker mode** (`--sandbox docker`) closes the filesystem gap: install, setup, agent and grading run in a container from `[docker] image`, the repo's `.devcontainer/devcontainer.json` or a Dockerfile, with only the run's temp dir mounted. The agent CLIs must be in the image. Credentials reach the container by name only; logins stored in files can be mounted read-only with `[docker] mounts`. Containers are killed with `docker kill` at their timeout. The network stays open, since agents need their APIs.
 
+git and grading still run on the host, against files the agent wrote, so:
+
+- the workspace's `.git` is mounted read-only from the agent's start on: a `.git/config` it wrote (`core.fsmonitor`, a filter driver) would otherwise run its commands on the host at the next `git add`
+- resetting tests never follows a symlink out of the workspace, and a test report that leads outside the run's dir isn't read
+- `tasks.jsonl` ids and commits must be hex, since they reach git's command line (`--output=...` would write files) and file paths
+
+**Untrusted text.** Task statements come from commit messages and GitHub issues, which anyone can write, and a hostile statement can steer an agent. On repos you don't control, use Docker mode and low-limit API keys: every agent gets every provider key in the allowlist, and the network is open. `show` strips terminal escape sequences, and report.md puts statements in code spans, since it becomes a PR comment.
+
+**Spend.** A run that ran but reported no cost (killed at its timeout, a model without a known price) counts toward `max_cost` at its estimate, not $0.
+
 ## 15. Tech stack
 
 - **Python ≥ 3.11, zero runtime dependencies.** The standard library covers it: `argparse`, `subprocess`, `tomllib`, `json`, `concurrent.futures`, `tempfile`, `shutil`, `math`, `random`, `html`. A tool that runs agents with your permissions should be small enough to audit, with nothing in its supply chain.

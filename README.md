@@ -191,6 +191,8 @@ By default agents run on your machine, in throwaway clones in the temp dir, with
 
 `--sandbox docker` runs setup, agents and tests in a container built from your `.devcontainer/devcontainer.json`, a `Dockerfile`, or `[docker] image`, with only the run's temp dir mounted. The agent CLIs must be installed in the image; credentials go in by name, or through `[docker] mounts`.
 
+Task statements come from commit messages and GitHub issues, which anyone can write, and a hostile one can steer an agent. On a repo you don't control, use `--sandbox docker` and API keys with a low spend limit. Every agent gets every provider key in the allowlist, and the network stays open, so a steered agent can still send those keys out.
+
 ## In CI
 
 whichagent is also a GitHub Action. This workflow reruns the benchmark when CLAUDE.md or AGENTS.md changes, comments the result on the pull request, and compares it with the last run on the default branch:
