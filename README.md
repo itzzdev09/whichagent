@@ -161,7 +161,7 @@ env     = { OPENAI_BASE_URL = "http://127.0.0.1:11434/v1", OPENAI_API_KEY = "oll
 "qwen2.5-coder:7b" = { input = 0, output = 0 }   # so the report shows $0 instead of "no cost"
 ```
 
-Aider and OpenCode setups above have been run end to end. Small local models are weak agents: on commander.js, qwen2.5-coder:7b solved nothing through Aider and made no tool calls through Qwen Code, while OpenCode's free model solved 1 of 2 tasks. Gemini CLI and GitHub Copilot have free tiers when you sign in; free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Aider prices Ollama, LM Studio and llamafile models at $0 itself; `[run] max_cost` only matters for paid agents.
+Aider and OpenCode setups above have been run end to end. Small local models are weak agents: on commander.js, qwen2.5-coder:7b solved nothing through Aider and made no tool calls through Qwen Code, while OpenCode's free model solved 1 of 2 tasks. Gemini CLI and GitHub Copilot have free tiers when you sign in; free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Model names starting with `ollama/`, `ollama_chat/`, `lm_studio/` or `llamafile/` are priced at $0 automatically; `[run] max_cost` only matters for paid agents.
 
 ## Stacks
 
