@@ -47,6 +47,7 @@ def proc(cmd, cwd, timeout, out, err=None, env=None, stdin=None, shell=False, co
     with open(out, "wb") as o, open(err or os.devnull, "wb") as e, open(stdin or os.devnull, "rb") as i:
         p = subprocess.Popen(cmd, cwd=cwd, env=env, shell=shell, stdin=i, stdout=o,
                              stderr=e if err else subprocess.STDOUT, start_new_session=os.name != "nt")
+        p.job = _job(p) if os.name == "nt" else None
         LIVE.add(p)
         if container:
             CONTAINERS.add(container)
@@ -56,14 +57,38 @@ def proc(cmd, cwd, timeout, out, err=None, env=None, stdin=None, shell=False, co
             rc = p.wait(timeout)
         except subprocess.TimeoutExpired:
             rc = None
-        # ponytail: on Windows, children an agent leaves behind after a normal exit survive; Job Objects would fix it
         if rc is None:
             _stop(p, container)
-        elif os.name != "nt":
-            kill(p)  # also stops what it left running in its process group
+        elif os.name != "nt" or p.job:
+            kill(p)  # also stops what it left running: its process group, or its Windows job
         LIVE.discard(p)
         CONTAINERS.discard(container)
+        if p.job:
+            _k32.CloseHandle(p.job)
     return rc, time.monotonic() - start
+
+
+if os.name == "nt":
+    import ctypes
+    from ctypes import wintypes
+    _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _k32.CreateJobObjectW.restype = wintypes.HANDLE
+    _k32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+    _k32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+    _k32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    _k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+
+
+def _job(p):
+    """Windows: a job object holding p and every process it starts, even ones it leaves running after it exits.
+    None if that fails; kill() then falls back to taskkill, which only finds children of a live process."""
+    # ponytail: a child started in the instant before the assignment escapes; CREATE_SUSPENDED would close that
+    job = _k32.CreateJobObjectW(None, None)
+    if job and _k32.AssignProcessToJobObject(job, int(p._handle)):
+        return job
+    if job:
+        _k32.CloseHandle(job)
+    return None
 
 
 def _stop(p, container):
@@ -73,7 +98,9 @@ def _stop(p, container):
 
 
 def kill(p):
-    if os.name == "nt":
+    if os.name == "nt" and getattr(p, "job", None):
+        _k32.TerminateJobObject(p.job, 1)
+    elif os.name == "nt":
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
     else:
         try:

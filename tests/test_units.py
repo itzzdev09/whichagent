@@ -1,6 +1,8 @@
 import json
 import os
+import sys
 import tempfile
+import time
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -267,6 +269,18 @@ class Security(unittest.TestCase):
         with self.assertRaises(SystemExit):
             store.tasks(d)
 
+    def test_leftover_processes_are_killed(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(git.rmtree, tmp)
+        beat = tmp / "beat.txt"
+        child = f"import time\nwhile True:\n    open({str(beat)!r}, 'w').write(str(time.time()))\n    time.sleep(0.05)\n"
+        parent = f"import subprocess, sys, time\nsubprocess.Popen([sys.executable, '-c', {child!r}])\ntime.sleep(1)\n"
+        rc, _ = sandbox.proc([sys.executable, "-c", parent], tmp, 30, tmp / "out.log")
+        self.assertEqual(rc, 0)  # it exited on its own, leaving the child running
+        time.sleep(0.2)  # a killed process can finish a write it had started
+        before = beat.stat().st_mtime_ns
+        time.sleep(0.5)
+        self.assertEqual(beat.stat().st_mtime_ns, before)
 
 
 if __name__ == "__main__":
