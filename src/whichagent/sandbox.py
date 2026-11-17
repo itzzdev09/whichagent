@@ -142,7 +142,9 @@ class Docker:
         return {**{k: v for k, v in os.environ.items() if k.upper() in CONTAINER_KEEP}, **_own(agent)}
 
     def argv(self, name, env=(), stdin=False):
-        a = ["docker", "run", "--rm", "--name", name, "-v", f"{self.ws.parent}:/wa", "-w", self.cwd]
+        a = ["docker", "run", "--rm", "--name", name, "-v", f"{self.ws.parent}:/wa", "-w", self.cwd,
+             # the container runs as root and the mount is owned by you: without this, git refuses the workspace
+             "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory", "-e", "GIT_CONFIG_VALUE_0=*"]
         for m in self.mounts:
             a += ["-v", m]
         for k in env:  # by name only: values travel in the docker CLI's environment, not on its command line

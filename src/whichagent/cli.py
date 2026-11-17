@@ -32,6 +32,8 @@ def parser():
          help="rerun tasks an agent has only done with another version of itself")
     flag("--by-version", action="store_true", default=argparse.SUPPRESS,
          help="report each agent version separately")
+    flag("--tasks", metavar="IDS", type=_list, default=argparse.SUPPRESS,
+         help="only these tasks (ids or id prefixes, comma-separated), e.g. to try an agent on a free tier")
     flag("--baseline", metavar="PATH", default=argparse.SUPPRESS,
          help="compare against another results.jsonl (or a dir holding .whichagent/)")
     for sec, keys in c.DEFAULTS.items():  # every config key is also a flag: --max-tasks 40
@@ -184,6 +186,8 @@ def cmd_run(cfg, a):
     tasks = store.read(store.state(cfg["root"]) / "tasks.jsonl")
     if not tasks:
         raise SystemExit("No tasks: run `whichagent mine` first (or check .whichagent/rejected.jsonl)")
+    if a.get("tasks"):
+        tasks = [t for t in tasks if any(t["id"].startswith(x) for x in a["tasks"])] or sys.exit("No such tasks")
     agents = c.selected(cfg)
     if not agents:
         raise SystemExit("No agents: none of the built-ins is on PATH and whichagent.toml defines none")

@@ -175,7 +175,8 @@ class Pipeline(unittest.TestCase):
         image_dir.mkdir()
         (image_dir / "Dockerfile").write_text("FROM python:3.12-slim\nRUN apt-get update && apt-get install -y"
                                               " --no-install-recommends git && rm -rf /var/lib/apt/lists/*\n")
-        subprocess.run(["docker", "build", "-q", "-t", "whichagent-test:1", str(image_dir)], check=True)
+        subprocess.run(["docker", "build", "-q", "-t", "whichagent-test:1", str(image_dir)], check=True,
+                       stdout=subprocess.DEVNULL)
         sentinel = self.tmp / "sentinel.txt"
         sentinel.write_text("outside the workspace")
         cfg = config.load(self.repo, {

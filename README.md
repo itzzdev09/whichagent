@@ -122,7 +122,7 @@ An adapter is a few lines of TOML, so adding your favorite agent makes a good fi
 | Agent | Built-in command | Cost data | Status |
 |---|---|---|---|
 | Claude Code | `claude -p --output-format json` | reported by the CLI | verified |
-| Codex CLI | `codex exec --json --full-auto -` | tokens x models.dev prices | unverified |
+| Codex CLI | `codex exec --json --sandbox workspace-write -` | tokens x models.dev prices | verified |
 | Gemini CLI | `gemini --output-format json --yolo` | tokens x models.dev prices | unverified |
 | Qwen Code | `qwen --output-format json --yolo` | tokens x models.dev prices | unverified |
 | Aider | `aider --message-file ... --yes-always` | parsed from its output; $0 for local models | verified |
@@ -216,7 +216,7 @@ So that agents see the pull request's CLAUDE.md rather than the one in each old 
 
 ## Status
 
-Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code and Aider adapters have been run end to end (Aider with a local Ollama model, at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
+Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code, Codex and Aider adapters have been run end to end (Aider with a local Ollama model, at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
 
 ## Contributing
 

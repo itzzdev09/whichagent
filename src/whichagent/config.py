@@ -41,13 +41,13 @@ BUILTIN = {
     "claude": {"cmd": "claude -p --output-format json --dangerously-skip-permissions", "parse": "claude-json"},
     # Unverified: flags and output formats come from each CLI's docs and haven't been run by whichagent yet.
     # `whichagent doctor` checks the flags against the installed CLI's --help.
-    "codex": {"cmd": "codex exec --json --full-auto -", "parse": "codex-jsonl", "unverified": True},
+    "codex": {"cmd": "codex exec --json --sandbox workspace-write -", "parse": "codex-jsonl"},
     "gemini": {"cmd": "gemini --output-format json --yolo", "parse": "gemini-json", "unverified": True},
     "aider": {"cmd": "aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore"
                      " --no-check-update --no-show-release-notes --analytics-disable --no-pretty",
               "stdin": False, "parse": "aider-text"},
     "qwen": {"cmd": "qwen --output-format json --yolo", "parse": "gemini-json", "unverified": True},
-    "opencode": {"cmd": "opencode run", "unverified": True},
+    "opencode": {"cmd": "opencode run --auto --format json", "parse": "opencode-json", "unverified": True},
     "goose": {"cmd": "goose run --no-session --instructions {prompt_file}", "stdin": False, "unverified": True},
     "amp": {"cmd": "amp --execute --dangerously-allow-all", "unverified": True},
     "copilot": {"cmd": "copilot --allow-all-tools", "unverified": True},

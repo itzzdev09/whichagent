@@ -84,12 +84,22 @@ class Units(unittest.TestCase):
         gemini = json.dumps({"response": "ok", "stats": {"models": {"gem-x": {"tokens": {
             "prompt": 1_000_000, "candidates": 50_000, "thoughts": 50_000, "cached": 0, "total": 1_100_000}}}}})
         self.assertEqual(agents.parse(CFG, "gemini-json", gemini, [])["cost_usd"], 4.0)
+        qwen = json.dumps([{"type": "system"}, {"type": "result", "is_error": True, "num_turns": 3,
+                                                  **json.loads(gemini)}])
+        self.assertEqual({k: v for k, v in agents.parse(CFG, "gemini-json", qwen, []).items()
+                          if k in ("cost_usd", "turns", "error")}, {"cost_usd": 4.0, "turns": 3, "error": True})
         aider = "Model: gpt-x with diff edit format\nTokens: 2.5k sent, 300 received. Cost: $0.01 message, $0.01 session.\n" \
                 "Tokens: 1k sent, 1.2k cache write, 200 received. Cost: $0.02 message, $0.03 session.\n"
         self.assertEqual(agents.parse(CFG, "aider-text", aider, []),
                          {"cost_usd": 0.03, "tokens_in": 3500, "tokens_out": 500, "model": "gpt-x"})
         local = "Model: ollama_chat/qwen2.5-coder:7b with whole edit format\nTokens: 9.8k sent, 443 received.\n"
         self.assertEqual(agents.parse(CFG, "aider-text", local, [])["cost_usd"], 0.0)
+        step = {"type": "step_finish", "part": {"tokens": {"input": 100, "output": 10, "reasoning": 5,
+                                                          "cache": {"read": 900, "write": 0}}, "cost": 0.25}}
+        oc = "\n".join(json.dumps(x) for x in [{"type": "step_start", "part": {}}, step, step])
+        self.assertEqual(agents.parse(CFG, "opencode-json", oc, ["opencode", "run", "-m", "opencode/x-free"]),
+                         {"cost_usd": 0.5, "tokens_in": 2000, "tokens_out": 30, "turns": 2,
+                          "model": "opencode/x-free", "error": False})
 
 
 class TestResults(unittest.TestCase):
@@ -155,7 +165,8 @@ class Sandbox(unittest.TestCase):
         argv = box.argv("n1", ["ANTHROPIC_API_KEY"], stdin=True)
         self.assertEqual(argv[:5] + argv[-2:], ["docker", "run", "--rm", "--name", "n1", "-i", "img:1"])
         self.assertIn(f"{ws.parent}:/wa", argv)
-        self.assertEqual(argv[argv.index("-e") + 1], "ANTHROPIC_API_KEY")
+        self.assertEqual(argv[argv.index("ANTHROPIC_API_KEY") - 1], "-e")  # by name: the value isn't on the line
+        self.assertIn("GIT_CONFIG_VALUE_0=*", argv)  # git trusts the root-owned view of your files
         self.assertEqual(box.path(ws.parent / "prompt.txt"), "/wa/prompt.txt")
         self.assertNotIn("PATH", box.env({"env": {}}))  # host paths mean nothing in the container
 

@@ -49,17 +49,22 @@ def claude(cfg, out, argv):
             "model": max(mu, key=lambda k: mu[k].get("costUSD", 0), default=None), "error": bool(d.get("is_error"))}
 
 
-def codex(cfg, out, argv):
-    """Unverified: `codex exec --json` events, token usage on turn.completed."""
-    tin = tout = cached = 0
-    error = False
+def _events(out):
+    """The JSON objects in JSONL output, skipping anything else."""
     for line in out.splitlines():
         try:
             e = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(e, dict):
-            continue
+        if isinstance(e, dict):
+            yield e
+
+
+def codex(cfg, out, argv):
+    """`codex exec --json` events, token usage on turn.completed."""
+    tin = tout = cached = 0
+    error = False
+    for e in _events(out):
         if e.get("type") == "turn.completed":
             u = e.get("usage") or {}
             tin += u.get("input_tokens", 0)
@@ -72,8 +77,11 @@ def codex(cfg, out, argv):
 
 
 def gemini(cfg, out, argv):
-    """Unverified: `gemini --output-format json`, tokens per model under stats.models."""
+    """Unverified: `gemini --output-format json`, tokens per model under stats.models. Qwen Code prints a list of
+    events with the same stats on its "result" event."""
     d = _json(out)
+    if isinstance(d, list):
+        d = next((x for x in reversed(d) if isinstance(x, dict) and x.get("type") == "result"), None)
     if not isinstance(d, dict):
         return {"error": True}
     models = (d.get("stats") or {}).get("models") or {}
@@ -86,7 +94,8 @@ def gemini(cfg, out, argv):
         p = cost(cfg, name, i, o, t.get("cached", 0))
         total = None if p is None or total is None else total + p
     model = max(models, key=lambda n: (models[n].get("tokens") or {}).get("total", 0), default=None)
-    return {"cost_usd": total, "tokens_in": tin, "tokens_out": tout, "model": model, "error": bool(d.get("error"))}
+    return {"cost_usd": total, "tokens_in": tin, "tokens_out": tout, "model": model, "turns": d.get("num_turns"),
+            "error": bool(d.get("error") or d.get("is_error"))}
 
 
 def aider(cfg, out, argv):
@@ -101,8 +110,25 @@ def aider(cfg, out, argv):
             "tokens_in": tin, "tokens_out": tout, "model": model}
 
 
+def opencode(cfg, out, argv):
+    """`opencode run --format json` events: tokens and cost on each step_finish; the model is the -m flag."""
+    tin = tout = steps = 0
+    usd, error = 0.0, False
+    for e in _events(out):
+        p = e.get("part") or {}
+        if e.get("type") == "step_finish":
+            t, cache = p.get("tokens") or {}, (p.get("tokens") or {}).get("cache") or {}
+            tin += t.get("input", 0) + cache.get("read", 0) + cache.get("write", 0)
+            tout += t.get("output", 0) + t.get("reasoning", 0)
+            usd += p.get("cost") or 0
+            steps += 1
+        error = error or e.get("type") == "error"
+    return {"cost_usd": round(usd, 6) if steps else None, "tokens_in": tin, "tokens_out": tout, "turns": steps,
+            "model": _flag(argv, "-m", "--model"), "error": error}
+
+
 PARSERS = {"claude-json": claude, "codex-jsonl": codex, "gemini-json": gemini, "aider-text": aider,
-           "none": lambda cfg, out, argv: {}}
+           "opencode-json": opencode, "none": lambda cfg, out, argv: {}}
 
 
 def _flag(argv, short, long):
