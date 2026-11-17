@@ -24,6 +24,20 @@ def read(path):
     return out
 
 
+HEX = re.compile(r"[0-9a-f]{7,64}")
+
+
+def tasks(d):
+    """tasks.jsonl in d. Ids and commits reach git's command line and file paths, so anything but hex is refused:
+    a crafted --output=... would make git write files."""
+    out = read(Path(d) / "tasks.jsonl")
+    bad = [t.get("id") for t in out if not all(isinstance(t.get(k), str) and HEX.fullmatch(t[k])
+                                               for k in ("id", "base", "fix"))]
+    if bad:
+        raise SystemExit(f"{Path(d) / 'tasks.jsonl'}: tasks with ids or commits that aren't hex: {bad[:5]}")
+    return out
+
+
 def append(path, obj):
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj) + "\n")

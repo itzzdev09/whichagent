@@ -119,7 +119,7 @@ def _data(cfg, a):
         d = root / ".whichagent"
         if root != cfg["root"] and not (d / "tasks.jsonl").exists():
             raise SystemExit(f"No .whichagent/tasks.jsonl in {root}")
-        tasks += [{**t, "root": str(root)} for t in store.read(d / "tasks.jsonl")]
+        tasks += [{**t, "root": str(root)} for t in store.tasks(d)]
         results += store.read(d / "results.jsonl")
     if names := cfg["run"]["agents"]:  # --agents narrows reports and comparisons too
         results = [r for r in results if r["agent"] in names]
@@ -194,7 +194,7 @@ def cmd_mine(cfg, a):
 
 def cmd_run(cfg, a):
     _need_test(cfg)
-    tasks = store.read(store.state(cfg["root"]) / "tasks.jsonl")
+    tasks = store.tasks(store.state(cfg["root"]))
     if not tasks:
         raise SystemExit("No tasks: run `whichagent mine` first (or check .whichagent/rejected.jsonl)")
     if a.get("tasks"):

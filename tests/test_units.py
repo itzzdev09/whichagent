@@ -258,6 +258,15 @@ class Security(unittest.TestCase):
         self.assertEqual(((outside / "victim").read_text(), (ws / "v.py").exists()), ("mine", False))
         self.assertEqual(sorted(p.name for p in outside.iterdir()), ["victim"])
 
+    def test_task_ids_and_commits_must_be_hex(self):
+        d = Path(tempfile.mkdtemp())
+        ok = {"id": "abc1234", "base": "a" * 40, "fix": "b" * 40}
+        store.append(d / "tasks.jsonl", ok)
+        self.assertEqual(store.tasks(d), [ok])
+        store.append(d / "tasks.jsonl", {**ok, "fix": "--output=/tmp/pwned"})
+        with self.assertRaises(SystemExit):
+            store.tasks(d)
+
 
 
 if __name__ == "__main__":

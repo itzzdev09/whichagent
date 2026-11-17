@@ -41,7 +41,7 @@ def load(repos, agents):
     tasks, results = [], []
     for root in repos:
         d = Path(root) / ".whichagent"
-        tasks += [{**t, "root": str(root)} for t in store.read(d / "tasks.jsonl")]
+        tasks += [{**t, "root": str(root)} for t in store.tasks(d)]
         results += store.read(d / "results.jsonl")
     if agents:
         results = [r for r in results if r["agent"] in agents]

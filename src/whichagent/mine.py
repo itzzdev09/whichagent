@@ -122,7 +122,7 @@ def mine(cfg, log=print):
     """Validate candidates in parallel until max_tasks; resumable through tasks.jsonl and rejected.jsonl."""
     sb.STOP.clear()
     root, m, d = cfg["root"], cfg["mine"], store.state(cfg["root"])
-    tasks = store.read(d / "tasks.jsonl")
+    tasks = store.tasks(d)
     seen = {t["id"] for t in tasks + store.read(d / "rejected.jsonl")}
     gh = shutil.which("gh") is not None and gh_api(root, "repos/{owner}/{repo}") is not None
     found = candidates(cfg, gh)
