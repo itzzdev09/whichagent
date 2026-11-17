@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import time
 import tomllib
 import urllib.request
@@ -212,11 +213,13 @@ def _models_dev(root):
     """{model: cost} from models.dev, cached for 24 hours in .whichagent/prices.json."""
     f = Path(root) / ".whichagent" / "prices.json"
     if not f.exists() or time.time() - f.stat().st_mtime > 86400:
+        tmp = f.with_name(f"prices.json.{os.getpid()}-{threading.get_ident()}")
         try:
             with urllib.request.urlopen(PRICES_URL, timeout=15) as r:
-                f.write_bytes(r.read())
+                tmp.write_bytes(r.read(50_000_000))  # bounded; a cut-off file fails to parse and prices go unknown
+            os.replace(tmp, f)  # whole or not at all: workers parsing at the same time never see half a file
         except OSError:
-            pass  # offline: keep using the stale copy, if any
+            tmp.unlink(missing_ok=True)  # offline: keep using the stale copy, if any
     try:
         data = json.loads(f.read_text("utf-8"))
     except (OSError, ValueError):
