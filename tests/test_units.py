@@ -68,6 +68,19 @@ class Units(unittest.TestCase):
     def test_durations(self):
         self.assertEqual([config.secs(v) for v in ("90", "90s", "30m", "2h")], [90, 90, 1800, 7200])
 
+    def test_free_agents(self):
+        self.assertTrue(agents.free(["aider", "--model", "ollama_chat/qwen2.5-coder:7b"], {}))
+        self.assertTrue(agents.free(["goose", "--provider", "ollama"], {}))
+        self.assertTrue(agents.free(["qwen"], {"OPENAI_BASE_URL": "http://127.0.0.1:11434/v1"}))
+        self.assertTrue(agents.free(["opencode", "run", "--model=opencode/deepseek-v4.1-flash-free"], {}))
+        self.assertFalse(agents.free(["claude", "-p"], {"HTTPS_PROXY": "http://localhost:3128"}))
+        self.assertFalse(agents.free(["codex", "exec", "-m", "gpt-x"], {}))
+
+    def test_extends_merges_env(self):
+        a = config._agent("g", {"g": {"name": "g", "extends": "gemini", "env": {"X": "1"}}}, 60)
+        self.assertEqual(a["env"], {"GEMINI_CLI_TRUST_WORKSPACE": "true", "X": "1"})
+        self.assertEqual(a["cmd"], config.BUILTIN["gemini"]["cmd"])
+
     def test_parsers(self):
         claude = json.dumps({"type": "result", "is_error": False, "num_turns": 7, "total_cost_usd": 0.12,
                              "modelUsage": {"m-big": {"inputTokens": 10, "cacheReadInputTokens": 90,
@@ -100,6 +113,17 @@ class Units(unittest.TestCase):
         self.assertEqual(agents.parse(CFG, "opencode-json", oc, ["opencode", "run", "-m", "opencode/x-free"]),
                          {"cost_usd": 0.5, "tokens_in": 2000, "tokens_out": 30, "turns": 2,
                           "model": "opencode/x-free", "error": False})
+        cp = "\n".join(json.dumps(x) for x in [{"type": "model.call_start", "data": {"model": "m1"}},
+                                               {"type": "assistant.turn_end", "data": {}},
+                                               {"type": "assistant.turn_end", "data": {}},
+                                               {"type": "result", "exitCode": 1}])
+        said = {"role": "assistant", "metadata": {"inference": {"provider": "ollama", "requestedModel": "q:7b"}}}
+        goose = "  __( O)>  banner\n" + json.dumps({"messages": [{"role": "user"}, said, said], "metadata": {
+            "input_tokens": 300, "output_tokens": 20, "status": "completed"}}, indent=2)
+        self.assertEqual(agents.parse(CFG, "goose-json", goose, []),
+                         {"cost_usd": 0.0, "tokens_in": 300, "tokens_out": 20, "turns": 2, "model": "ollama/q:7b",
+                          "error": False})
+        self.assertEqual(agents.parse(CFG, "copilot-jsonl", cp, []), {"model": "m1", "turns": 2, "error": True})
 
 
 class TestResults(unittest.TestCase):

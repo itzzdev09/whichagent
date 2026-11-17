@@ -127,7 +127,9 @@ An adapter is a few lines of TOML, so adding your favorite agent makes a good fi
 | Qwen Code | `qwen --output-format json --yolo` | tokens x models.dev prices | unverified |
 | Aider | `aider --message-file ... --yes-always` | parsed from its output; $0 for local models | verified |
 | OpenCode | `opencode run --auto --format json` | reported by the CLI | verified |
-| Goose, Amp, Copilot CLI, Cursor CLI | headless mode, prompt on stdin or a file | time and pass/fail only | unverified |
+| GitHub Copilot CLI | `copilot --allow-all-tools --no-ask-user --output-format json` | none: it reports premium requests, not tokens | verified |
+| Goose | `goose run --no-session --instructions ... --output-format json` | tokens x prices; $0 on Ollama | unverified |
+| Amp, Cursor CLI | headless mode, prompt on stdin | time and pass/fail only | unverified |
 | Anything else | any command; the prompt arrives on stdin or as `{prompt_file}` | optional | |
 
 Unverified adapters follow each CLI's docs but haven't been run by whichagent yet; `whichagent doctor` checks their flags on your machine. Several of these agents have free tiers or free models, which makes them cheap to compare. Agents get only an allowlist of environment variables; pass anything else with `env = { TOKEN = "$MY_TOKEN" }`, which reads it from your shell.
@@ -161,7 +163,7 @@ env     = { OPENAI_BASE_URL = "http://127.0.0.1:11434/v1", OPENAI_API_KEY = "oll
 "qwen2.5-coder:7b" = { input = 0, output = 0 }   # so the report shows $0 instead of "no cost"
 ```
 
-Aider and OpenCode setups above have been run end to end. Small local models are weak agents: on commander.js, qwen2.5-coder:7b solved nothing through Aider and made no tool calls through Qwen Code, while OpenCode's free model solved 1 of 2 tasks. Gemini CLI and GitHub Copilot have free tiers when you sign in; free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Model names starting with `ollama/`, `ollama_chat/`, `lm_studio/` or `llamafile/` are priced at $0 automatically; `[run] max_cost` only matters for paid agents.
+Aider and OpenCode setups above have been run end to end. Small local models are weak agents: on commander.js, qwen2.5-coder:7b solved nothing through Aider and made no tool calls through Qwen Code, while OpenCode's free model solved 1 of 2 tasks. GitHub Copilot's free plan works once you sign in (runs use premium requests from its monthly allowance). Gemini CLI's Google sign-in no longer serves individuals, so it needs a `GEMINI_API_KEY` from Google AI Studio, which has a free tier. Free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Model names starting with `ollama/`, `ollama_chat/`, `lm_studio/` or `llamafile/` are priced at $0 automatically; `[run] max_cost` only matters for paid agents.
 
 ## Stacks
 
@@ -233,7 +235,7 @@ So that agents see the pull request's CLAUDE.md rather than the one in each old 
 
 ## Status
 
-Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code, Codex, OpenCode and Aider adapters have been run end to end (OpenCode with a free model and Aider with a local Ollama model, both at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
+Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code, Codex, Copilot, OpenCode and Aider adapters have been run end to end (OpenCode with a free model and Aider with a local Ollama model, both at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
 
 ## Contributing
 

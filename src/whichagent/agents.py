@@ -127,8 +127,40 @@ def opencode(cfg, out, argv):
             "model": _flag(argv, "-m", "--model"), "error": error}
 
 
+def copilot(cfg, out, argv):
+    """`copilot --output-format json` events: model and turns. It reports premium requests, not tokens or USD."""
+    model, turns, error = None, 0, False
+    for e in _events(out):
+        t = e.get("type")
+        if t == "model.call_start":
+            model = (e.get("data") or {}).get("model") or model
+        elif t == "assistant.turn_end":
+            turns += 1
+        elif t == "result":
+            error = e.get("exitCode", 0) != 0
+    return {"model": model, "turns": turns, "error": error}
+
+
+def goose(cfg, out, argv):
+    """`goose run --output-format json`: one object after its banner, tokens and status under metadata.
+    The model is reported as provider/model, so local providers (ollama) are priced at $0."""
+    i = out.find("\n{")
+    d = _json(out[i + 1:] if i >= 0 else out)
+    if not isinstance(d, dict):
+        return {"error": True}
+    m = d.get("metadata") or {}
+    said = [x for x in d.get("messages") or [] if x.get("role") == "assistant"]
+    inf = ((said[-1].get("metadata") or {}).get("inference") or {}) if said else {}
+    provider = _flag(argv, "", "--provider") or inf.get("provider")
+    name = _flag(argv, "", "--model") or inf.get("requestedModel")
+    model = f"{provider}/{name}" if provider and name else name
+    tin, tout = m.get("input_tokens", 0), m.get("output_tokens", 0)
+    return {"cost_usd": cost(cfg, model, tin, tout, m.get("cache_read_input_tokens", 0)), "tokens_in": tin,
+            "tokens_out": tout, "turns": len(said), "model": model, "error": m.get("status", "completed") != "completed"}
+
+
 PARSERS = {"claude-json": claude, "codex-jsonl": codex, "gemini-json": gemini, "aider-text": aider,
-           "opencode-json": opencode, "none": lambda cfg, out, argv: {}}
+           "opencode-json": opencode, "copilot-jsonl": copilot, "goose-json": goose, "none": lambda cfg, out, argv: {}}
 
 
 def _flag(argv, short, long):
@@ -149,6 +181,16 @@ def _codex_model():
 
 
 LOCAL = ("ollama", "ollama_chat", "lm_studio", "llamafile")  # litellm prefixes for models on your machine
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+NO_COST = {"none", "copilot-jsonl"}  # parsers that never report what a run cost
+
+
+def free(argv, env):
+    """True when an agent runs a model on this machine (an ollama/lm_studio/llamafile model, a localhost endpoint)
+    or a model named free (OpenCode's -free, OpenRouter's :free): a run costs $0 before it reports anything."""
+    words = [w.split("=", 1)[-1] for w in argv] + [v for k, v in env.items() if "PROXY" not in k.upper()]
+    return any(w.split("/")[0] in LOCAL or w.endswith(("-free", ":free")) or any(h in w for h in LOCAL_HOSTS)
+               for w in words)
 
 
 def cost(cfg, model, tin, tout, cached=0):

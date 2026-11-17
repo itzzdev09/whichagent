@@ -96,10 +96,15 @@ def run(cfg, agents, tasks, yes=False, keep=False, retry_errors=False, new_versi
         return []
     costs = {a["name"]: [x["cost_usd"] for x in old if x["agent"] == a["name"] and x["cost_usd"] is not None
                          and x["status"] not in ERRORS] for a in agents}  # a failed login costs $0 and says nothing
-    lo = sum(statistics.median(costs[a["name"]]) if costs[a["name"]] else NO_HISTORY[0] for _, a, _ in todo)
-    hi = sum(max(costs[a["name"]]) if costs[a["name"]] else NO_HISTORY[1] for _, a, _ in todo)
+    zero = {a["name"] for a in agents if ag.free(c.argv(a), a["env"]) or a["parse"] in ag.NO_COST}
+
+    def per_run(name):  # (typical, worst) USD for one run: $0 for local and free models, else history, else a guess
+        xs = costs[name]
+        return (0.0, 0.0) if name in zero else (statistics.median(xs), max(xs)) if xs else NO_HISTORY
+    lo = sum(per_run(a["name"])[0] for _, a, _ in todo)
+    hi = sum(per_run(a["name"])[1] for _, a, _ in todo)
     log(f"{len(todo)} runs, estimated ${lo:.2f}-${hi:.2f} (stops before passing max_cost ${rc['max_cost']:.2f})")
-    blind = [a["name"] for a in agents if a["parse"] == "none"]
+    blind = [a["name"] for a in agents if a["parse"] in ag.NO_COST]
     if blind:
         log(f"No cost data from {', '.join(blind)}: their spending isn't counted toward max_cost.")
     if not yes and not c.ask("Continue?"):
@@ -114,7 +119,7 @@ def run(cfg, agents, tasks, yes=False, keep=False, retry_errors=False, new_versi
         with slots[agent["name"]]:
             with lock:
                 xs = costs[agent["name"]]
-                est = sum(xs) / len(xs) if xs else NO_HISTORY[1]
+                est = 0.0 if agent["name"] in zero else sum(xs) / len(xs) if xs else NO_HISTORY[1]
                 if sb.STOP.is_set() or budget["over"] or budget["spent"] + budget["inflight"] + est > rc["max_cost"]:
                     budget["over"] = not sb.STOP.is_set()
                     return

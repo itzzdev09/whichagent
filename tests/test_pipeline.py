@@ -154,6 +154,10 @@ class Pipeline(unittest.TestCase):
         self.assertEqual(run.run(self.cfg, perfect, self.tasks, yes=True, new_version=True, log=quiet), [])
         cfg = config.load(self.repo, {"run": {"attempts": 5, "max_cost": 0.025, "jobs": 1}})
         self.assertEqual(len(run.run(cfg, perfect, self.tasks, yes=True, log=quiet)), 2)  # $0.01 each
+        # an agent on a local model has no history, yet isn't held back by the $0.10-$1.00 guess for unknown agents
+        local = {**self.cfg["agents"]["noop"], "name": "noop-local", "args": "--model ollama/x"}
+        cfg = config.load(self.repo, {"run": {"max_cost": 0.5, "jobs": 1}})
+        self.assertEqual(len(run.run(cfg, [local], self.tasks, yes=True, log=quiet)), len(self.tasks))
 
     def test_cli_report_show_compare(self):
         out = io.StringIO()

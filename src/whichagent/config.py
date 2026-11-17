@@ -42,15 +42,18 @@ BUILTIN = {
     # Unverified: flags and output formats come from each CLI's docs and haven't been run by whichagent yet.
     # `whichagent doctor` checks the flags against the installed CLI's --help.
     "codex": {"cmd": "codex exec --json --sandbox workspace-write -", "parse": "codex-jsonl"},
-    "gemini": {"cmd": "gemini --output-format json --yolo", "parse": "gemini-json", "unverified": True},
+    # Gemini reads ~/.gemini/.env (GEMINI_API_KEY) and honors --yolo only in trusted folders
+    "gemini": {"cmd": "gemini --output-format json --yolo", "env": {"GEMINI_CLI_TRUST_WORKSPACE": "true"},
+               "parse": "gemini-json", "unverified": True},
     "aider": {"cmd": "aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore"
                      " --no-check-update --no-show-release-notes --analytics-disable --no-pretty",
               "stdin": False, "parse": "aider-text"},
     "qwen": {"cmd": "qwen --output-format json --yolo", "parse": "gemini-json", "unverified": True},
     "opencode": {"cmd": "opencode run --auto --format json", "parse": "opencode-json"},
-    "goose": {"cmd": "goose run --no-session --instructions {prompt_file}", "stdin": False, "unverified": True},
+    "goose": {"cmd": "goose run --no-session --instructions {prompt_file} --output-format json", "stdin": False,
+              "env": {"GOOSE_MODE": "auto"}, "parse": "goose-json", "unverified": True},
     "amp": {"cmd": "amp --execute --dangerously-allow-all", "unverified": True},
-    "copilot": {"cmd": "copilot --allow-all-tools", "unverified": True},
+    "copilot": {"cmd": "copilot --allow-all-tools --no-ask-user --output-format json", "parse": "copilot-jsonl"},
     "cursor": {"cmd": "cursor-agent --print --force --output-format json", "unverified": True},
 }
 AGENT_KEYS = {"name", "extends", "cmd", "args", "stdin", "parse", "timeout", "env", "overlay"}
@@ -96,7 +99,7 @@ def _agent(name, defined, timeout, seen=()):
     ext = own.get("extends")
     base = _agent(ext, defined, timeout, seen + (name,)) if ext and ext != name else BUILTIN.get(name, {})
     a = {"args": "", "stdin": True, "parse": "none", "env": {}, "overlay": {}, "timeout": timeout,
-         **base, **own, "name": name}
+         **base, **own, "name": name, "env": {**base.get("env", {}), **own.get("env", {})}}
     if "cmd" not in a:
         raise SystemExit(f"agent {name!r}: needs cmd or extends")
     return a
