@@ -18,7 +18,7 @@ def runnable(paths):
 
 
 def _quote(s):
-    return shlex.quote(s) if os.name != "nt" else f'"{s}"' if " " in s else s
+    return shlex.quote(s) if os.name != "nt" else f'"{s}"' if re.search(r"[\s&|<>^()]", s) else s
 
 
 def command(template, files, report=""):
