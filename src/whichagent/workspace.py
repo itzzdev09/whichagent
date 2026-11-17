@@ -3,6 +3,7 @@ lockfiles match), setup. Mining, running and doctor all use these, so tasks are 
 import hashlib
 import os
 import shutil
+import stat
 import tempfile
 import threading
 from pathlib import Path
@@ -47,7 +48,20 @@ def cache_dir(cfg):
     """In the temp dir, like workspaces: a dependency cache in a synced folder would sync gigabytes."""
     root = cfg["root"]
     tag = hashlib.sha256(str(root).encode()).hexdigest()[:8]
-    return Path(tempfile.gettempdir()) / "whichagent-cache" / f"{store.slug(root.name)}-{tag}"
+    user = f"-{os.getuid()}" if hasattr(os, "getuid") else ""  # /tmp is shared on Linux
+    return Path(tempfile.gettempdir()) / f"whichagent-cache{user}" / f"{store.slug(root.name)}-{tag}"
+
+
+def _private(d):
+    """Create d if needed; True when only you can write it. In a shared /tmp another user could otherwise plant
+    dependencies that your tests then run."""
+    try:
+        d.mkdir(mode=0o700, parents=True, exist_ok=True)
+        s = os.lstat(d)
+    except OSError:
+        return False
+    return not hasattr(os, "getuid") or (stat.S_ISDIR(s.st_mode) and s.st_uid == os.getuid()
+                                         and not s.st_mode & 0o077)
 
 
 def _key(cfg, ws):
@@ -62,7 +76,7 @@ def _key(cfg, ws):
 def _save(cfg, key, ws):
     """Cache everything install created (node_modules at every level, and so on)."""
     dest = cache_dir(cfg) / key
-    if dest.exists():
+    if not _private(dest.parent.parent) or dest.exists():
         return
     tmp = dest.with_name(f"{key}.tmp-{os.getpid()}-{threading.get_ident()}")
     try:
@@ -84,7 +98,7 @@ def _save(cfg, key, ws):
 
 def _restore(cfg, key, ws):
     src = cache_dir(cfg) / key
-    if not src.is_dir():
+    if not _private(src.parent.parent) or not src.is_dir():
         return False
     try:
         os.utime(src)  # most recently used
