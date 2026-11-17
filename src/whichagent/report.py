@@ -275,8 +275,9 @@ def markdown(tasks, results, name, baseline=None, by_version=False):
         md += ["", "## Against the baseline", "", _md([["agent", "solve rate", "tasks", "verdict"], *vs])]
     md += ["", *_notes(rows, per, by_version)]
     names = [n for n, _ in rows]
-    grid = [[f"`{t['id']}`", _title(t), *[_cell([r for r in per[n] if r["task"] == t["id"]]) for n in names]]
-            for t in tasks]
+    # statements are anyone's words and report.md becomes a PR comment: in code spans, no @mentions, links or images
+    grid = [[f"`{t['id']}`", "`" + _title(t).replace("`", "'") + "`",
+             *[_cell([r for r in per[n] if r["task"] == t["id"]]) for n in names]] for t in tasks]
     md += ["", "## Tasks", "", " ".join(f"{v} {k.replace('_', ' ')}" for k, v in MARK.items()), "",
            _md([["task", "statement", *names], *grid]), ""]
     return "\n".join(md)

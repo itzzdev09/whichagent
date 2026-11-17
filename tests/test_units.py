@@ -269,6 +269,11 @@ class Security(unittest.TestCase):
         with self.assertRaises(SystemExit):
             store.tasks(d)
 
+    def test_untrusted_text_is_defused(self):
+        t = {"id": "abc1234", "statement": "@everyone see [this](https://evil.example) `now`", "source_files": []}
+        md = report.markdown([t], [result("abc1234", "claude", "1", "solved")], "x")
+        self.assertIn("| `@everyone see [this](https://evil.example) 'now'` |", md)
+
     def test_leftover_processes_are_killed(self):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(git.rmtree, tmp)
