@@ -18,6 +18,28 @@ def prompt(task):
     return text
 
 
+def regrade(cfg, task, run_dir):
+    """Grade a run's saved diff in a clean workspace, or None if it can't be done (e.g. it doesn't apply).
+
+    An agent's sandbox can leave its workspace unusable: Codex on Windows locks node_modules, so the tests can't
+    even start. A diff that really breaks the tests still fails here."""
+    ws, box = workspace.create(cfg, task["id"], task["base"])
+    try:
+        if not workspace.prepare(cfg, ws, box, run_dir):
+            return None
+        if task["mode"] == "visible":
+            g.put(cfg["root"], task["fix"], task["test_files"], ws)
+        start = g.snapshot(ws)
+        patch = ws.parent / "agent.patch"  # outside the repo; bytes, so Windows doesn't turn \n into \r\n
+        patch.write_bytes((run_dir / "agent.diff").read_text("utf-8").encode("utf-8"))
+        g.git(ws, "apply", "--whitespace=nowarn", str(patch))
+        return {**grade.grade(cfg, task, ws, box, start, run_dir), "regraded": True}
+    except RuntimeError:
+        return None
+    finally:
+        workspace.remove(ws, box)
+
+
 def run_one(cfg, task, agent, attempt, keep=False):
     """One agent on one task in a fresh workspace, graded. Returns the result dict."""
     root = cfg["root"]
@@ -53,7 +75,11 @@ def run_one(cfg, task, agent, attempt, keep=False):
         usage = ag.parse(cfg, agent["parse"], (d / "stdout.log").read_text("utf-8", "replace"), argv)
         r.update({k: v for k, v in usage.items() if k != "error"}, secs=round(secs, 1), exit_code=rc)
         try:
-            r.update(grade.grade(cfg, task, ws, box, start, d))
+            graded = grade.grade(cfg, task, ws, box, start, d)
+            if task.get("fail_to_pass") and "f2p" not in graded:  # the tests never reported: don't blame the agent yet
+                (d / "tests.log").replace(d / "tests-first-try.log")
+                graded = regrade(cfg, task, d) or graded
+            r.update(graded)
         except RuntimeError as e:  # e.g. the agent broke the workspace's .git
             return {**r, "status": "agent_error", "error": str(e)}
         r["status"] = ("timeout" if rc is None else "solved" if r["tests_pass"] and not r["regression"]

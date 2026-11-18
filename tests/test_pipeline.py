@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from tests import repos
@@ -132,6 +133,18 @@ class Pipeline(unittest.TestCase):
         for attempt in (91, 92):
             self.assertEqual(run.run_one(cfg, self.div, cfg["agents"]["noop"], attempt)["status"], "failed")
         self.assertEqual(count.read_text(), ".")  # installed once, restored from the cache once
+
+    def test_regrades_when_the_tests_never_report(self):
+        real = run.grade.grade
+
+        def no_report_first(cfg, task, ws, box, start, run_dir):  # as when an agent's sandbox locks the workspace
+            mock.side_effect = real
+            out = real(cfg, task, ws, box, start, run_dir)
+            return {**{k: v for k, v in out.items() if k not in ("f2p", "p2p")}, "tests_pass": False}
+        with unittest.mock.patch.object(run.grade, "grade", side_effect=no_report_first) as mock:
+            r = run.run_one(self.cfg, self.div, self.cfg["agents"]["perfect"], 98)
+        self.assertEqual(mock.call_count, 2)
+        self.assertEqual((r["status"], r["regraded"]), ("solved", True))
 
     def test_setup_error(self):
         cfg = config.load(self.repo, {"repo": {"setup": "exit 1"}})
