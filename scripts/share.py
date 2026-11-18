@@ -27,7 +27,10 @@ from whichagent import report, store  # noqa: E402
 
 NAMES = {"claude": "Claude Code", "codex": "Codex CLI", "copilot": "Copilot CLI", "gemini": "Gemini CLI",
          "gemini-lite": "Gemini CLI", "opencode-free": "OpenCode", "aider-qwen7b": "Aider", "qwen-local": "Qwen Code",
-         "goose-local": "Goose", "goose": "Goose", "qwen": "Qwen Code", "aider": "Aider", "opencode": "OpenCode"}
+         "goose-local": "Goose", "goose": "Goose", "qwen": "Qwen Code", "aider": "Aider", "opencode": "OpenCode",
+         "aider-q3": "Aider", "qwen-q3": "Qwen Code", "goose-q3": "Goose"}
+MARKS = {"solved": ("ok", "✓"), "failed": ("no", "✕"), "timeout": ("no", "T"), "agent_error": ("no", "!"),
+         "setup_error": ("no", "?")}
 REPO = "github.com/itzzdev09/whichagent"
 THEMES = {  # dataviz reference palette: one series hue, validated on each surface
     "dark": {"surface": "#1a1a19", "card": "#232322", "text": "#f0efec", "text2": "#c3c2b7", "muted": "#898781",
@@ -82,6 +85,43 @@ def table(rows, head=True):
             + "".join(f"<tr>{cells(r, 'td')}</tr>" for r in rows[1 if head else 0:]) + "</table>")
 
 
+def grid(tasks, rows, per):
+    """Who solved what: one row per task, one column per agent, a mark in every cell."""
+    names = [n for n, _ in rows]
+    head = "<tr><th>task</th>" + "".join(f"<th>{esc(NAMES.get(n, n))}</th>" for n in names) + "</tr>"
+    body = ""
+    for t in tasks:
+        repo = Path(t["root"]).name
+        cells = ""
+        for n in names:
+            r = next((x for x in per[n] if x["task"] == t["id"]), None)
+            cls, mark = MARKS.get(r["status"], ("no", "?")) if r else ("none", "")
+            cells += f'<td class="m"><span class="{cls}">{mark}</span></td>'
+        body += f'<tr><td class="t"><b>{esc(repo)}</b> {esc(report._title(t, 50))}</td>{cells}</tr>'
+    return f'<table class="grid">{head}{body}</table>'
+
+
+def same_model(rows, per):
+    """Agents that ran the same model, side by side: what's left to differ is the harness."""
+    groups = collections.defaultdict(list)
+    for n, s in rows:
+        groups[who(n, per[n])[1]].append((n, s))
+    out = ""
+    for model, members in groups.items():
+        if len(members) < 2:
+            continue
+        table_rows = [["harness", "solved", "time to fix", "tokens per run", "wrote tests", "touched other files"]]
+        for n, s in members:
+            h = report._habits(per[n])
+            table_rows.append([NAMES.get(n, n), f'{s["solved"]}/{s["runs"]}', report._secs(h["fix_secs"]),
+                               report._k(h["tokens"]), report._pct(h["tests"]), report._pct(h["strays"])])
+        solved = [{r["task"] for r in per[n] if r["status"] == "solved"} for n, _ in members]
+        differ = len(set.union(*solved) - set.intersection(*solved))
+        out += (f"<h2>{esc(model)}</h2><div class=wide>{table(table_rows)}</div>"
+                f'<p class="note">Different outcome on {differ} of {members[0][1]["tasks"]} tasks.</p>')
+    return out
+
+
 def pages(tasks, results, title, note=""):
     rows, pairs, per = report.analyze(tasks, results)
     repos = " + ".join(dict.fromkeys(Path(t["root"]).name for t in tasks))
@@ -108,6 +148,10 @@ def pages(tasks, results, title, note=""):
     return {
         "leaderboard": (1200, 675, f"<h1>{esc(title)}</h1><p class=sub>{sub}</p>"
                                    f'<div class="board">{bars(rows, per)}</div>{note}{foot}'),
+        "grid": (1200, 675, f"<h1>Who solved what</h1><p class=sub>{sub}</p>{grid(tasks, rows, per)}"
+                            f'<p class="note">✓ solved · ✕ failed · T timed out · ! agent error</p>{foot}'),
+        "harness": (1200, 675, f"<h1>Same model, different harness</h1><p class=sub>{sub}</p>"
+                               f"{same_model(rows, per)}{foot}"),
         "best": (1200, 675, f"<h1>Which agent for which job</h1><p class=sub>{sub}</p>"
                             f'<div class="cols"><div><h2>Best at</h2>{best_at}</div>'
                             f'<div><h2>Best for</h2>{table(groups)}</div></div>'
@@ -126,6 +170,11 @@ def pages(tasks, results, title, note=""):
 
 
 CSS = """*{box-sizing:border-box;margin:0}
+.grid th{text-align:center;padding:4px 6px;font-size:13px}.grid th:first-child{text-align:left}
+.grid td{padding:3px 6px;font-size:14px}.grid td.t{white-space:nowrap;overflow:hidden;max-width:520px}
+.grid td.t b{font-weight:600;margin-right:6px}.grid td.m{text-align:center;width:88px}
+.m span{display:inline-block;width:26px;height:24px;line-height:24px;border-radius:4px;font-weight:700;font-size:14px}
+.m .ok{background:{bar};color:#fff}.m .no{border:1px solid {base};line-height:22px;color:{text2}}
 html,body{width:{w}px;height:{h}px;overflow:hidden}
 body{background:{surface};color:{text};font:16px/1.35 "Segoe UI",system-ui,-apple-system,sans-serif;
 padding:40px 48px;display:flex;flex-direction:column;gap:14px;font-variant-numeric:tabular-nums}
