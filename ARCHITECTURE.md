@@ -219,7 +219,7 @@ Built-in adapters. `whichagent doctor` checks each adapter's flags against the i
 | GitHub Copilot CLI | `copilot --allow-all-tools --no-ask-user --output-format json` | stdin | none: premium requests only (model and turns are parsed) |
 | Cursor CLI | `cursor-agent --print --force --output-format json` | stdin | none yet |
 
-Claude Code, Codex, Copilot, OpenCode and Aider have been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
+Claude Code, Codex, Copilot, Gemini CLI, OpenCode and Aider have been run end to end; every other adapter is marked unverified until it has. An agent's `env` values starting with `$` are read from your shell (`env = { GH_TOKEN = "$GH_TOKEN" }`), so credentials outside the allowlist never have to be written into the TOML.
 
 ## 8. Grading
 

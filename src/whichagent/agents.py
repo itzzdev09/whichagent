@@ -78,7 +78,7 @@ def codex(cfg, out, argv):
 
 
 def gemini(cfg, out, argv):
-    """Unverified: `gemini --output-format json`, tokens per model under stats.models. Qwen Code prints a list of
+    """`gemini --output-format json`, tokens per model under stats.models. Qwen Code prints a list of
     events with the same stats on its "result" event."""
     d = _json(out)
     if isinstance(d, list):

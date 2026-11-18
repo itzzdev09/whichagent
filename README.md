@@ -129,7 +129,7 @@ An adapter is a few lines of TOML, so adding your favorite agent makes a good fi
 |---|---|---|---|
 | Claude Code | `claude -p --output-format json` | reported by the CLI | verified |
 | Codex CLI | `codex exec --json --sandbox workspace-write -` | tokens x models.dev prices | verified |
-| Gemini CLI | `gemini --output-format json --yolo` | tokens x models.dev prices | unverified |
+| Gemini CLI | `gemini --output-format json --yolo` | tokens x models.dev prices | verified |
 | Qwen Code | `qwen --output-format json --yolo` | tokens x models.dev prices | unverified |
 | Aider | `aider --message-file ... --yes-always` | parsed from its output; $0 for local models | verified |
 | OpenCode | `opencode run --auto --format json` | reported by the CLI | verified |

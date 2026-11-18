@@ -44,7 +44,7 @@ BUILTIN = {
     "codex": {"cmd": "codex exec --json --sandbox workspace-write -", "parse": "codex-jsonl"},
     # Gemini reads ~/.gemini/.env (GEMINI_API_KEY) and honors --yolo only in trusted folders
     "gemini": {"cmd": "gemini --output-format json --yolo", "env": {"GEMINI_CLI_TRUST_WORKSPACE": "true"},
-               "parse": "gemini-json", "unverified": True},
+               "parse": "gemini-json"},
     "aider": {"cmd": "aider --message-file {prompt_file} --yes-always --no-auto-commits --no-gitignore"
                      " --no-check-update --no-show-release-notes --analytics-disable --no-pretty",
               "stdin": False, "parse": "aider-text"},
