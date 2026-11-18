@@ -150,7 +150,7 @@ def pages(tasks, results, title, note=""):
                                    f'<div class="board">{bars(rows, per)}</div>{note}{foot}'),
         "grid": (1200, 675, f"<h1>Who solved what</h1><p class=sub>{sub}</p>{grid(tasks, rows, per)}"
                             f'<p class="note">✓ solved · ✕ failed · T timed out · ! agent error</p>{foot}'),
-        "harness": (1200, 675, f"<h1>Same model, different harness</h1><p class=sub>{sub}</p>"
+        "harness": (1200, 420, f"<h1>Same model, different harness</h1><p class=sub>{sub}</p>"
                                f"{same_model(rows, per)}{foot}"),
         "best": (1200, 675, f"<h1>Which agent for which job</h1><p class=sub>{sub}</p>"
                             f'<div class="cols"><div><h2>Best at</h2>{best_at}</div>'
@@ -180,7 +180,7 @@ body{background:{surface};color:{text};font:16px/1.35 "Segoe UI",system-ui,-appl
 padding:40px 48px;display:flex;flex-direction:column;gap:14px;font-variant-numeric:tabular-nums}
 h1{font-size:34px;font-weight:700;letter-spacing:-.01em}h1.big{font-size:40px}h2{font-size:18px;margin-bottom:8px}
 .sub{color:{text2};font-size:17px}.note{color:{muted};font-size:14px}
-.board{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+.board{display:flex;flex-direction:column;gap:9px;margin-top:6px;flex:1;justify-content:space-around}
 .row{display:grid;grid-template-columns:230px 1fr 92px 90px 100px;gap:16px;align-items:center}
 .compact .row{grid-template-columns:200px 1fr 92px}
 .row.head{color:{muted};font-size:13px}.num{text-align:right}
@@ -198,7 +198,7 @@ h1{font-size:34px;font-weight:700;letter-spacing:-.01em}h1.big{font-size:40px}h2
 .line span{color:{muted};font-size:13px}.line b{font-size:17px;font-weight:600}
 .best{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;margin-top:8px}
 table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:7px 10px;border-bottom:1px solid {grid}}
-th{color:{muted};font-weight:500;font-size:13px}td{font-size:15px;white-space:nowrap}.wide td{font-size:17px}
+th{color:{muted};font-weight:500;font-size:13px}td{font-size:15px;white-space:nowrap}.wide{flex:1}.wide table{height:100%}.wide td{font-size:17px}
 footer{margin-top:auto;display:flex;justify-content:space-between;color:{muted};font-size:13px}"""
 
 
