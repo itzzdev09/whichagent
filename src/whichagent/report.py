@@ -236,7 +236,7 @@ def best_at(rows, per, pairs):
 
     def lead(key, fmt):
         vals = [(v, n) for n, s, h in fixers if (v := key(s, h)) is not None]
-        if not vals:
+        if not vals or len(vals) < 2 and len(fixers) > 1:  # "cheapest" of one agent that reports a cost says nothing
             return None
         best = min(v for v, _ in vals)
         return ", ".join(n for v, n in vals if v == best) + f" ({fmt(best)})"
