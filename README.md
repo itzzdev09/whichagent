@@ -56,6 +56,17 @@ flowchart LR
 
 Everything runs on your machine. Your code goes only to the agents you choose to run, the same as when you use them day to day.
 
+## A first benchmark
+
+I ran Claude Code, Codex, Copilot, Gemini CLI and OpenCode on 12 real fixes from commander.js, ufo, es-toolkit and flask. Three agents solved 11, one solved 10 and one solved 9, and no gap was larger than noise. Codex and Copilot ran the same model and had identical outcomes.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="benchmarks/2026-11-18/images/leaderboard.png">
+  <img src="benchmarks/2026-11-18/images/leaderboard-light.png" alt="OpenCode, Codex and Copilot solved 11 of 12 tasks, Claude Code 10 and Gemini CLI 9, with overlapping 95% intervals.">
+</picture>
+
+**[Read the full report](benchmarks/2026-11-18/README.md)**: who solved what, same model in different tools, real failures, what free tiers allow, the method and the raw data.
+
 ## Quickstart
 
 Python 3.11+ and git. Nothing else to install: whichagent has no dependencies.
@@ -169,7 +180,7 @@ env     = { OPENAI_BASE_URL = "http://127.0.0.1:11434/v1", OPENAI_API_KEY = "oll
 "qwen2.5-coder:7b" = { input = 0, output = 0 }   # so the report shows $0 instead of "no cost"
 ```
 
-Aider and OpenCode setups above have been run end to end. Small local models are weak agents: on commander.js, qwen2.5-coder:7b solved nothing through Aider and made no tool calls through Qwen Code, while OpenCode's free model solved 1 of 2 tasks. GitHub Copilot's free plan works once you sign in (runs use premium requests from its monthly allowance). Gemini CLI's Google sign-in no longer serves individuals, so it needs a `GEMINI_API_KEY` from Google AI Studio, which has a free tier. Free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Model names starting with `ollama/`, `ollama_chat/`, `lm_studio/` or `llamafile/` are priced at $0 automatically; `[run] max_cost` only matters for paid agents.
+The Aider and OpenCode setups above have been run end to end. OpenCode's free model solved 11 of 12 tasks in the [benchmark](benchmarks/2026-11-18/README.md), though free limits can stop longer runs. Small local models are much weaker agents, and a 6 GB GPU is slow for them. GitHub Copilot's free plan works once you sign in (runs use premium requests from its monthly allowance). Gemini CLI's Google sign-in no longer serves individuals, so it needs a `GEMINI_API_KEY` from Google AI Studio, which has a free tier. Free tiers are rate-limited, so try a few tasks first with `whichagent run --tasks ID1,ID2`. Model names starting with `ollama/`, `ollama_chat/`, `lm_studio/` or `llamafile/` are priced at $0 automatically; `[run] max_cost` only matters for paid agents.
 
 ## Stacks
 
@@ -245,7 +256,7 @@ Keep it on `pull_request`, never `pull_request_target`: a pull request's `whicha
 
 ## Status
 
-Pre-release. Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents; dogfooding on real repos is under way. Grading has been checked against real fixes: on 16 tasks mined from click and commander.js, the real fix is graded solved and no change is graded failed, every time. The Claude Code, Codex, Copilot, OpenCode and Aider adapters have been run end to end (OpenCode with a free model and Aider with a local Ollama model, both at $0); the other adapters, Docker mode and the GitHub Action haven't yet. Star or watch the repo to hear when it lands on PyPI.
+Early release, [on PyPI](https://pypi.org/project/whichagent/). Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents, and CI runs it on Linux, macOS and Windows, including Docker mode. On every published [benchmark](benchmarks/2026-11-18/README.md) task, the real fix grades as solved and an unchanged repo grades as failed. The Claude Code, Codex, Copilot, Gemini CLI, OpenCode and Aider adapters have been run end to end. The remaining adapters and the GitHub Action haven't yet.
 
 ## Contributing
 
