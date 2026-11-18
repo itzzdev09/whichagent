@@ -8,6 +8,7 @@ or Edge (set WA_BROWSER to pick one), at 2x for sharp text:
   best.png         1200x675  best at / best for                                     (X thread)
   habits.png       1200x675  how each agent works                                   (X thread)
   square.png       1080x1080 leaderboard and best-at                                (LinkedIn)
+  slide-*.png      1080x1080 results, who solved what, same model                   (LinkedIn carousel)
   cover.png        1000x420  title and top agents                                   (dev.to cover)
 each also as *-light.png, plus the .html each is rendered from. The numbers come from whichagent's own report code.
 """
@@ -85,7 +86,7 @@ def table(rows, head=True):
             + "".join(f"<tr>{cells(r, 'td')}</tr>" for r in rows[1 if head else 0:]) + "</table>")
 
 
-def grid(tasks, rows, per):
+def grid(tasks, rows, per, width=50):
     """Who solved what: one row per task, one column per agent, a mark in every cell."""
     names = [n for n, _ in rows]
     head = "<tr><th>task</th>" + "".join(f"<th>{esc(NAMES.get(n, n))}</th>" for n in names) + "</tr>"
@@ -97,7 +98,7 @@ def grid(tasks, rows, per):
             r = next((x for x in per[n] if x["task"] == t["id"]), None)
             cls, mark = MARKS.get(r["status"], ("no", "?")) if r else ("none", "")
             cells += f'<td class="m"><span class="{cls}">{mark}</span></td>'
-        body += f'<tr><td class="t"><b>{esc(repo)}</b> {esc(report._title(t, 50))}</td>{cells}</tr>'
+        body += f'<tr><td class="t"><b>{esc(repo)}</b> {esc(report._title(t, width))}</td>{cells}</tr>'
     return f'<table class="grid">{head}{body}</table>'
 
 
@@ -120,6 +121,26 @@ def same_model(rows, per):
         out += (f"<h2>{esc(model)}</h2><div class=wide>{table(table_rows)}</div>"
                 f'<p class="note">Different outcome on {differ} of {members[0][1]["tasks"]} tasks.</p>')
     return out
+
+
+def model_slide(rows, per):
+    """The first model that two agents shared, one column per agent, for a square slide."""
+    groups = collections.defaultdict(list)
+    for n, s in rows:
+        groups[who(n, per[n])[1]].append((n, s))
+    model, members = next(((m, g) for m, g in groups.items() if len(g) > 1), (None, []))
+    if not members:
+        return ""
+    habits = [report._habits(per[n]) for n, _ in members]
+    solved = [{r["task"] for r in per[n] if r["status"] == "solved"} for n, _ in members]
+    differ = len(set.union(*solved) - set.intersection(*solved))
+    body = [["", *[NAMES.get(n, n) for n, _ in members]],
+            ["Solved", *[f'{s["solved"]}/{s["runs"]}' for _, s in members]],
+            ["Time to a fix", *[report._secs(h["fix_secs"]) for h in habits]],
+            ["Wrote tests", *[report._pct(h["tests"]) for h in habits]],
+            ["Touched other files", *[report._pct(h["strays"]) for h in habits]]]
+    return (f"<h2>Both ran {esc(model)}</h2><div class=wide>{table(body)}</div>"
+            f'<p class="sub">Different outcome on {differ} of {members[0][1]["tasks"]} tasks.</p>')
 
 
 def pages(tasks, results, title, note=""):
@@ -163,6 +184,13 @@ def pages(tasks, results, title, note=""):
         "square": (1080, 1080, f"<h1>{esc(title)}</h1><p class=sub>{sub}</p>"
                                f'<div class="board compact">{bars(rows, per, compact=True)}</div>'
                                f'<div class="best">{best_at}</div>{table(groups[:5])}{foot}'),
+        "slide-1-results": (1080, 1080, f'<div class="slide"><h1>{esc(title)}</h1><p class=sub>{sub}</p>'
+                                        f'<div class="board compact">{bars(rows, per, compact=True)}</div></div>{foot}'),
+        "slide-2-grid": (1080, 1080, f'<div class="slide"><h1>Who solved what</h1>'
+                                     f"{grid(tasks, rows, per, 32)}"
+                                     f'<p class="note">✓ solved · ✕ failed · T timed out</p></div>{foot}'),
+        "slide-3-model": (1080, 1080, f'<div class="slide"><h1>Same model, different tool</h1>'
+                                      f"{model_slide(rows, per)}</div>{foot}"),
         "cover": (1000, 420, f'<h1 class="big">{esc(title)}</h1><p class=sub>{sub}</p>'
                              f'<div class="board compact">{bars(rows[:4], per, compact=True)}</div>'
                              f"<footer><span>whichagent · {REPO}</span></footer>"),
@@ -170,6 +198,8 @@ def pages(tasks, results, title, note=""):
 
 
 CSS = """*{box-sizing:border-box;margin:0}
+.slide{zoom:1.22;flex:1;display:flex;flex-direction:column;gap:14px;min-height:0}
+.slide .grid{flex:1;height:100%}.slide h2{margin:6px 0 0}.slide .wide td{font-size:23px}.slide .wide th{font-size:17px}
 .grid th{text-align:center;padding:4px 6px;font-size:13px}.grid th:first-child{text-align:left}
 .grid td{padding:3px 6px;font-size:14px}.grid td.t{white-space:nowrap;overflow:hidden;max-width:520px}
 .grid td.t b{font-weight:600;margin-right:6px}.grid td.m{text-align:center;width:88px}
