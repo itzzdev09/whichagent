@@ -49,7 +49,7 @@ def test(cfg, box, ws, files, log, suite=False):
     return rc, secs, testresults.parse(found, log.read_text("utf-8", "replace"), box.roots)
 
 
-def grade(cfg, task, ws, box, start, run_dir):
+def grade(cfg, task, ws, box, start, run_dir, scope=()):
     """Measure the agent's changes against the start tree, then test with the real tests in place."""
     root = cfg["root"]
     changed = g.changes(ws, start)
@@ -61,7 +61,8 @@ def grade(cfg, task, ws, box, start, run_dir):
          # removing lines from an existing test, or touching test config, counts; adding tests doesn't
          "tampered": any(f[0] != "A" and f[2] > 0 or f[0] == "D" or c.match(p, c.TEST_CONFIG)
                          for p, f in tests.items()),
-         "flagged": [p for p in changed if c.match(p, c.FLAGGED)]}
+         "flagged": [p for p in changed if c.match(p, c.FLAGGED)],
+         "out_of_scope": sorted(p for p in changed if scope and not c.match(p, scope))}
     g.put(root, task["base"], list(tests), ws)
     g.put(root, task["fix"], task["test_files"], ws)
     rc, _, results = test(cfg, box, ws, runnable(task["test_files"]), run_dir / "tests.log")

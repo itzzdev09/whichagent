@@ -28,7 +28,8 @@ DEFAULTS = {
     "mine": {"since": "12 months ago", "max_tasks": 25, "max_candidates": 300, "max_files": 5, "max_lines": 200,
              "verify_runs": 2, "min_statement_words": 8, "history_depth": 200},
     "run": {"agents": [], "attempts": 1, "jobs": 3, "jobs_per_agent": 0, "timeout": "30m",
-            "max_cost": 25.0, "regression": True, "sandbox": "host"},
+            "max_cost": 25.0, "regression": True, "sandbox": "host",
+            "strict_scope": False},  # strict: a change outside an agent's scope fails the run
     "docker": {"image": "", "mounts": []},
 }
 PLACEHOLDER = re.compile(r"\{(files|dirs|names)(?::([^}]*))?\}")  # {names:,} joins with "," instead of " "
@@ -56,7 +57,7 @@ BUILTIN = {
     "copilot": {"cmd": "copilot --allow-all-tools --no-ask-user --output-format json", "parse": "copilot-jsonl"},
     "cursor": {"cmd": "cursor-agent --print --force --output-format json", "unverified": True},
 }
-AGENT_KEYS = {"name", "extends", "cmd", "args", "stdin", "parse", "timeout", "env", "overlay"}
+AGENT_KEYS = {"name", "extends", "cmd", "args", "stdin", "parse", "timeout", "env", "overlay", "scope"}
 
 
 def load(root, overrides=None):
@@ -98,7 +99,7 @@ def _agent(name, defined, timeout, seen=()):
     own = defined.get(name, {})
     ext = own.get("extends")
     base = _agent(ext, defined, timeout, seen + (name,)) if ext and ext != name else BUILTIN.get(name, {})
-    a = {"args": "", "stdin": True, "parse": "none", "env": {}, "overlay": {}, "timeout": timeout,
+    a = {"args": "", "stdin": True, "parse": "none", "env": {}, "overlay": {}, "scope": [], "timeout": timeout,
          **base, **own, "name": name, "env": {**base.get("env", {}), **own.get("env", {})}}
     if "cmd" not in a:
         raise SystemExit(f"agent {name!r}: needs cmd or extends")

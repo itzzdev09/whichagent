@@ -119,6 +119,15 @@ args    = "--model haiku"
 
 Overlay files are copied into every workspace before the agent starts: CLAUDE.md, AGENTS.md, MCP configs, skills, rules files, anything.
 
+To keep an agent to one part of the repo, give it a scope. The prompt lists the allowed paths, every change outside them is recorded in `out_of_scope` and counted in the report, and `--strict-scope` fails those runs:
+
+```toml
+[[agent]]
+name    = "codex on the parser"
+extends = "codex"
+scope   = ["src/parser/**", "tests/parser/**"]
+```
+
 ## Built to be honest
 
 | Trap | What whichagent does |
