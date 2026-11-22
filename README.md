@@ -97,7 +97,7 @@ Every config key is also a flag: `--max-tasks 40`, `--agents claude,gemini`, `--
 
 ### Which agent for which job
 
-The report doesn't stop at one leaderboard. **Best at** names the leader on each axis: most tasks solved, cheapest per fix, fastest fix, fewest tokens per fix, and the agent that stays closest to the files the real fix touched. **Best for** groups the tasks by their real fix (small or large, one file or several, bug fix or feature, language) and says who solved the most in each group, and whether that lead is real or within noise. **How each agent works** lists each agent's median turns, tokens and time to a fix, how often it touched files the real fix didn't, and how often it wrote tests of its own.
+The report doesn't stop at one leaderboard. **Best at** names the leader on each axis: most tasks solved, cheapest per fix, fastest fix, fewest tokens per fix, and the agent that stays closest to the files the real fix touched. **Best for** groups the tasks by their real fix (small or large, one file or several, bug fix or feature, language, and the folder the fix is in) and says who solved the most in each group, and whether that lead is real or within noise. **How each agent works** lists each agent's median turns, tokens and time to a fix, how often it touched files the real fix didn't, and how often it wrote tests of its own.
 
 `python scripts/share.py OUT REPO...` renders the results as PNGs sized for X, Reddit, LinkedIn and a dev.to cover, in dark and light, with headless Chrome or Edge.
 
