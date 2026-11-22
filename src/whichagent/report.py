@@ -4,6 +4,7 @@ import datetime
 import html
 import itertools
 import json
+import posixpath
 import re
 import statistics
 from pathlib import Path
@@ -149,7 +150,7 @@ MIN_GROUP = 3  # a category with fewer tasks says nothing
 
 def kinds(t):
     """A task's categories, read off its real fix: size, files touched, bug fix or feature (a keyword guess on the
-    statement's first line) and language."""
+    statement's first line), language and area (the folder holding all of the fix)."""
     n, files = t.get("fix_lines") or 0, t.get("source_files") or []
     langs = {LANGS.get(f.rsplit(".", 1)[-1]) for f in files} - {None}
     out = {"size": "small fix (up to 10 lines)" if n <= 10 else "medium fix (11-50 lines)" if n <= 50
@@ -158,6 +159,8 @@ def kinds(t):
            "kind": "bug fix" if FIX_WORDS.search(_title(t, 300)) else "feature or change"}
     if len(langs) == 1:
         out["language"] = langs.pop()
+    if files:
+        out["area"] = f"in {posixpath.commonpath([posixpath.dirname(f) for f in files]) or 'the top folder'}/"
     return out
 
 

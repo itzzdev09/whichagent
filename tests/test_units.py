@@ -176,7 +176,8 @@ class Reports(unittest.TestCase):
 
     def test_best_for_and_best_at(self):
         tasks = [{"id": f"t{i}", "statement": "Fix crash on empty input" if i < 4 else "Add a --quiet option",
-                  "fix_lines": 5 if i < 4 else 80, "source_files": ["a.py"]} for i in range(8)]
+                  "fix_lines": 5 if i < 4 else 80,
+                  "source_files": ["src/cli/a.py"] if i < 4 else ["src/core/b.py", "src/core/x/c.py"]} for i in range(8)]
         rs = ([result(t["id"], "a", "1", "solved") for t in tasks]
               + [result(t["id"], "b", "1", "solved" if i >= 4 else "failed", cost=0.0) for i, t in enumerate(tasks)])
         rows, pairs, per = report.analyze(tasks, rs)
@@ -184,6 +185,7 @@ class Reports(unittest.TestCase):
         self.assertEqual(groups["bug fix"], ["4", "a 4/4", "within noise of b (p = 0.12)"])  # 4 wins of 4: p = 1/8
         self.assertEqual(groups["feature or change"][2], "tied")
         self.assertEqual(groups["large fix (over 50 lines)"][2], "tied")
+        self.assertEqual(groups["in src/cli/"][:2], ["4", "a 4/4"])  # per folder
         self.assertNotIn("Python", groups)  # every task is Python: nothing to tell apart
         best = dict(report.best_at(rows, per, pairs))
         self.assertEqual(best["most tasks solved"], "a (8/8, within noise of b)")
