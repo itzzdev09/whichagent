@@ -444,8 +444,8 @@ All four are built. The "Done when" checks need real agents, platforms and servi
 | Version | Scope | Done when | Status |
 |---|---|---|---|
 | v0.1 "It runs" | everything in section 18 | 20+ valid tasks mined and 3 agents run end to end on 3 real repos, on Linux, macOS and Windows | 24 tasks mined on 3 repos (Windows); Claude Code run end to end on a fixture repo; Aider + local qwen2.5-coder:7b on commander.js's 6 tasks; grading checked against the real fixes on 16 tasks |
-| v0.2 "Sharper" | per-test grading; Go, Rust and Java; dependency cache; shareable SVG results card; comparison across agent versions | the same 3 repos graded per test, plus a Go and a Rust repo | the 3 repos' runners checked with `doctor`; parsers tested on sample Go, Rust and Java output |
-| v0.3 "Sandboxed" | Docker and devcontainer mode | `peeker` and a filesystem-escape fake agent are both contained | test written; it needs a Docker daemon |
+| v0.2 "Sharper" | per-test grading; Go, Rust and Java; dependency cache; shareable SVG results card; comparison across agent versions | the same 3 repos graded per test, plus a Go and a Rust repo | done: the benchmark's repos graded per test; the `stacks` workflow mines samber/lo (Go) and serde-rs/json (Rust) and grades tasks per test |
+| v0.3 "Sandboxed" | Docker and devcontainer mode | `peeker` and a filesystem-escape fake agent are both contained | done on Linux: CI runs the containment test, with `peeker` and the escaping agent contained |
 | v0.4 "Always on" | GitHub Action: reruns on CLAUDE.md or AGENTS.md changes and on a schedule, with a PR comment showing the delta | the action runs on whichagent's own repo | needs GitHub Actions running on the repo |
 
 Later, if people want it: opt-in pooled results across repos ("which agent wins on Django apps?"), rewriting statements to strip solution hints, and tasks that span several commits.
