@@ -256,7 +256,7 @@ Keep it on `pull_request`, never `pull_request_target`: a pull request's `whicha
 
 ## Status
 
-Early release, [on PyPI](https://pypi.org/project/whichagent/). Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents, and CI runs it on Linux, macOS and Windows, including Docker mode. On every published [benchmark](benchmarks/2026-11-18/README.md) task, the real fix grades as solved and an unchanged repo grades as failed. The Claude Code, Codex, Copilot, Gemini CLI, OpenCode and Aider adapters have been run end to end. The remaining adapters and the GitHub Action haven't yet.
+Early release, [on PyPI](https://pypi.org/project/whichagent/). Everything in [ARCHITECTURE.md](ARCHITECTURE.md) is built and covered by an offline test suite with fake agents, and CI runs it on Linux, macOS and Windows, including Docker mode, and mines a real Go and Rust repo to check per-test grading. On every published [benchmark](benchmarks/2026-11-18/README.md) task, the real fix grades as solved and an unchanged repo grades as failed. The Claude Code, Codex, Copilot, Gemini CLI, OpenCode and Aider adapters have been run end to end. The remaining adapters and the GitHub Action haven't yet.
 
 ## Contributing
 
