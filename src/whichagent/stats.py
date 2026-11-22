@@ -65,7 +65,8 @@ def summary(results):
             "status": collections.Counter(r["status"] for r in results),
             "tampered": sum(bool(r.get("tampered")) for r in runs),
             "regressions": sum(r.get("regression") is True for r in runs),
-            "flagged": sum(bool(r.get("flagged")) for r in runs)}  # edited pyproject.toml, package.json, ...
+            "flagged": sum(bool(r.get("flagged")) for r in runs),
+            "out_of_scope": sum(bool(r.get("out_of_scope")) for r in runs)}  # edited pyproject.toml, package.json, ...
 
 
 def compare(ra, rb):

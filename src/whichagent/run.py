@@ -10,15 +10,17 @@ NO_HISTORY = (0.10, 1.00)  # USD per run before an agent has any results: a deli
 ERRORS = ("agent_error", "setup_error")
 
 
-def prompt(task):
+def prompt(task, scope=()):
     text = f"Resolve the following task in this repository.\n\n{task['statement']}\n"
     if task["mode"] == "visible":
         text += ("\nThese tests fail now and must pass:\n"
                  + "".join(f"- {f}\n" for f in grade.runnable(task["test_files"])) + "Don't edit these files.\n")
+    if scope:
+        text += "\nOnly change files matching these paths:\n" + "".join(f"- {p}\n" for p in scope)
     return text
 
 
-def regrade(cfg, task, run_dir):
+def regrade(cfg, task, run_dir, scope=()):
     """Grade a run's saved diff in a clean workspace, or None if it can't be done (e.g. it doesn't apply).
 
     An agent's sandbox can leave its workspace unusable: Codex on Windows locks node_modules, so the tests can't
@@ -33,7 +35,7 @@ def regrade(cfg, task, run_dir):
         patch = ws.parent / "agent.patch"  # outside the repo; bytes, so Windows doesn't turn \n into \r\n
         patch.write_bytes((run_dir / "agent.diff").read_text("utf-8").encode("utf-8"))
         g.git(ws, "apply", "--whitespace=nowarn", str(patch))
-        return {**grade.grade(cfg, task, ws, box, start, run_dir), "regraded": True}
+        return {**grade.grade(cfg, task, ws, box, start, run_dir, scope), "regraded": True}
     except RuntimeError:
         return None
     finally:
@@ -49,7 +51,7 @@ def run_one(cfg, task, agent, attempt, keep=False):
     d.mkdir(parents=True, exist_ok=True)
     r = {"task": task["id"], "agent": agent["name"], "attempt": attempt, "status": "", "tests_pass": False,
          "regression": None, "cost_usd": None, "tokens_in": None, "tokens_out": None, "secs": None, "turns": None,
-         "files_changed": 0, "extra_files": 0, "wrote_tests": False, "tampered": False, "flagged": [],
+         "files_changed": 0, "extra_files": 0, "wrote_tests": False, "tampered": False, "flagged": [], "out_of_scope": [],
          "agent_version": version, "model": None}
     ws, box = workspace.create(cfg, task["id"], task["base"])
     try:
@@ -65,7 +67,7 @@ def run_one(cfg, task, agent, attempt, keep=False):
         if task["mode"] == "visible":
             g.put(root, task["fix"], task["test_files"], ws)
         start = g.snapshot(ws)
-        text = prompt(task)
+        text = prompt(task, agent["scope"])
         pf = ws.parent / "prompt.txt"  # outside the repo, so it isn't part of the agent's diff
         pf.write_text(text, "utf-8")
         (d / "prompt.txt").write_text(text, "utf-8")
@@ -75,14 +77,15 @@ def run_one(cfg, task, agent, attempt, keep=False):
         usage = ag.parse(cfg, agent["parse"], (d / "stdout.log").read_text("utf-8", "replace"), argv)
         r.update({k: v for k, v in usage.items() if k != "error"}, secs=round(secs, 1), exit_code=rc)
         try:
-            graded = grade.grade(cfg, task, ws, box, start, d)
+            graded = grade.grade(cfg, task, ws, box, start, d, agent["scope"])
             if task.get("fail_to_pass") and "f2p" not in graded:  # the tests never reported: don't blame the agent yet
                 (d / "tests.log").replace(d / "tests-first-try.log")
-                graded = regrade(cfg, task, d) or graded
+                graded = regrade(cfg, task, d, agent["scope"]) or graded
             r.update(graded)
         except RuntimeError as e:  # e.g. the agent broke the workspace's .git
             return {**r, "status": "agent_error", "error": str(e)}
         r["status"] = ("timeout" if rc is None else "solved" if r["tests_pass"] and not r["regression"]
+                       and not (cfg["run"]["strict_scope"] and r["out_of_scope"])
                        else "agent_error" if rc or usage.get("error") else "failed")
         return r
     finally:

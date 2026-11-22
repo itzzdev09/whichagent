@@ -123,6 +123,15 @@ class Pipeline(unittest.TestCase):
             r = run.run_one(cfg, self.div, cfg["agents"][agent], 90)
             self.assertEqual((r["status"], "f2p" in r), (status, False))
 
+    def test_scope(self):
+        for scope, strict, status, out in ((["calc.py"], True, "solved", []), (["lib/**"], False, "solved", ["calc.py"]),
+                                           (["lib/**"], True, "failed", ["calc.py"])):
+            cfg = config.load(self.repo, {"run": {"strict_scope": strict}})
+            r = run.run_one(cfg, self.div, {**cfg["agents"]["perfect"], "scope": scope}, 80)
+            self.assertEqual((r["status"], r["out_of_scope"]), (status, out))
+            self.assertIn(f"- {scope[0]}", (store.run_dir(self.repo, r["task"], "perfect", r["agent_version"], 80)
+                                            / "prompt.txt").read_text())
+
     def test_dependency_cache(self):
         count, install, check = self.tmp / "installs.txt", self.tmp / "install.py", self.tmp / "check.py"
         install.write_text("import os\nos.makedirs('deps', exist_ok=True)\nopen('deps/x.txt', 'w').write('1')\n"
@@ -137,9 +146,9 @@ class Pipeline(unittest.TestCase):
     def test_regrades_when_the_tests_never_report(self):
         real = run.grade.grade
 
-        def no_report_first(cfg, task, ws, box, start, run_dir):  # as when an agent's sandbox locks the workspace
+        def no_report_first(cfg, task, ws, box, start, run_dir, scope=()):  # as when an agent's sandbox locks the workspace
             mock.side_effect = real
-            out = real(cfg, task, ws, box, start, run_dir)
+            out = real(cfg, task, ws, box, start, run_dir, scope)
             return {**{k: v for k, v in out.items() if k not in ("f2p", "p2p")}, "tests_pass": False}
         with unittest.mock.patch.object(run.grade, "grade", side_effect=no_report_first) as mock:
             r = run.run_one(self.cfg, self.div, self.cfg["agents"]["perfect"], 98)
